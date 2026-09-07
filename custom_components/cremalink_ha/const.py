@@ -26,3 +26,12 @@ CONNECTION_CLOUD = "cloud"
 DEFAULT_ADDON_URL = "http://localhost:10280"
 CUSTOM_MAP_DIR = "cremalink_custom_maps"
 TOKEN_DIR = "cremalink_tokens"
+
+# Embedded local server (spec: 002-embedded-local-server) — replaces the
+# Supervisor add-on as the local connection mechanism.
+CONF_CONNECTION_MODE = "connection_mode"
+CONNECTION_MODE_EMBEDDED = "embedded"
+CONF_ADVERTISED_IP = "advertised_ip"
+DEFAULT_LOCAL_SERVER_PORT = 10280
+LOCAL_SERVER_PORT_FALLBACK_RANGE = 50
+REPAIR_RECONFIGURE_REQUIRED = "reconfigure_required"

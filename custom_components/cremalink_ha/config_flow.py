@@ -8,6 +8,7 @@ import voluptuous as vol
 from cremalink.devices import get_device_maps, load_device_map
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 
 from cremalink import Client, authenticate_cloud, detect_model_id
 
@@ -63,7 +64,6 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Cremalink."""
 
     VERSION = 1
-    _addon_url = DEFAULT_ADDON_URL
     _temp_token_file: str | None = None
     _discovered_devices: list[str] = []
     _selected_map: str | None = None
@@ -104,9 +104,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     temp_file, raw_devices, coffee_devices = (
                         await self.hass.async_add_executor_job(_login_and_discover)
                     )
-                except (
-                    Exception
-                ) as e:
+                except Exception as e:
                     _LOGGER.error("Cloud login failed: %s", e)
                     errors["base"] = "auth_failed"
                 else:
@@ -231,7 +229,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 DEVICE_NAME: device_name,
                 CONF_DSN: dsn,
                 CONF_DEVICE_MAP: device_map_id,
-                CONF_ADDON_URL: self._addon_url,
+                CONF_CONNECTION_MODE: CONNECTION_MODE_EMBEDDED,
                 CONF_LAN_KEY: lan["lanip_key"],
                 CONF_DEVICE_IP: lan["lan_ip"],
             }
@@ -273,15 +271,13 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             cloud_support = support.get("cloud", False)
 
             if local_support and cloud_support:
-                return self.async_show_menu(
-                    step_id="choose_connection",
-                    menu_options={
-                        "local": "Local Network (Add-on) [recommended]",
-                        "cloud_auth": "Cloud (Ayla Networks)",
-                    },
-                )
+                # Keys must be real async_step_* method names -- Home
+                # Assistant's menu handling jumps straight to
+                # async_step_<next_step_id>, it never calls back into the
+                # step that showed the menu.
+                return await self.async_step_choose_connection()
             elif local_support:
-                return await self.async_step_local()
+                return await self.async_step_device()
             elif cloud_support:
                 return await self.async_step_cloud_auth()
             else:
@@ -295,52 +291,28 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_choose_connection(self, user_input=None):
-        """Handle the connection choice step."""
-        if user_input == "local":
-            return await self.async_step_local()
-        elif user_input == "cloud_auth":
-            return await self.async_step_cloud_auth()
-        return self.async_abort(reason="unknown_choice")
+        """Re-display the local/cloud menu.
 
-    async def async_step_local(self, user_input=None):
-        """Handle the local connection step.
-
-        Args:
-            user_input: Input data from the user.
-
-        Returns:
-            The next step in the flow.
+        Home Assistant validates that a menu's own step_id is a real
+        async_step_* method as soon as the menu is shown (it may also
+        re-invoke this directly on flow resume/back-navigation) -- but a
+        menu *selection* always jumps straight to async_step_<chosen>
+        (async_step_device / async_step_cloud_auth), never here.
         """
-        errors = {}
-        if user_input is not None:
-            self._addon_url = user_input[CONF_ADDON_URL]
-            try:
-                import requests
-
-                def _check():
-                    # Check health endpoint of the addon
-                    return requests.get(
-                        f"{self._addon_url.rstrip('/')}/health", timeout=5
-                    )
-
-                resp = await self.hass.async_add_executor_job(_check)
-                if resp.status_code == 200:
-                    return await self.async_step_device()
-            except Exception:
-                pass
-
-            errors["base"] = "cannot_connect"
-
-        return self.async_show_form(
-            step_id="local",
-            data_schema=vol.Schema(
-                {vol.Required(CONF_ADDON_URL, default=DEFAULT_ADDON_URL): str}
-            ),
-            errors=errors,
+        return self.async_show_menu(
+            step_id="choose_connection",
+            menu_options={
+                "device": "Local Network [recommended]",
+                "cloud_auth": "Cloud (Ayla Networks)",
+            },
         )
 
     async def async_step_device(self, user_input=None):
         """Handle the local device configuration step.
+
+        Collects DSN/LAN key/device IP directly; the resulting entry runs
+        via the embedded local server (spec: 002-embedded-local-server) --
+        no separate add-on URL is collected or stored.
 
         Args:
             user_input: Input data from the user
@@ -351,8 +323,8 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         maps = await self.hass.async_add_executor_job(get_available_maps, self.hass)
 
         if user_input:
-            user_input[CONF_ADDON_URL] = self._addon_url
             user_input[CONF_CONNECTION_TYPE] = CONNECTION_LOCAL
+            user_input[CONF_CONNECTION_MODE] = CONNECTION_MODE_EMBEDDED
 
             if self._selected_map and CONF_DEVICE_MAP not in user_input:
                 user_input[CONF_DEVICE_MAP] = self._selected_map
@@ -484,5 +456,42 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="cloud_device",
             data_schema=vol.Schema(schema),
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Switch a legacy add-on-based local entry to the embedded server.
+
+        Reached via the config entry's native "Reconfigure" action (and
+        linked from the ``reconfigure_required`` repair issue created in
+        ``__init__.py``). DSN/device name/device map/LAN key/device IP are
+        all already known from the existing entry and are never
+        re-requested -- only an optional advertised-IP override is
+        collected (spec: 002-embedded-local-server, FR-004/FR-013).
+        """
+        entry_id = self.context["entry_id"]
+        entry = self.hass.config_entries.async_get_entry(entry_id)
+        errors = {}
+
+        if user_input is not None:
+            new_data = dict(entry.data)
+            new_data.pop(CONF_ADDON_URL, None)
+            new_data[CONF_CONNECTION_MODE] = CONNECTION_MODE_EMBEDDED
+            if user_input.get(CONF_ADVERTISED_IP):
+                new_data[CONF_ADVERTISED_IP] = user_input[CONF_ADVERTISED_IP]
+
+            self.hass.config_entries.async_update_entry(entry, data=new_data)
+            await self.hass.config_entries.async_reload(entry.entry_id)
+            ir.async_delete_issue(self.hass, DOMAIN, f"reconfigure_{entry.entry_id}")
+            return self.async_abort(reason="reconfigure_successful")
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({vol.Optional(CONF_ADVERTISED_IP): str}),
+            description_placeholders={
+                "device_name": entry.data.get(DEVICE_NAME)
+                or entry.data.get(CONF_DSN, ""),
+                "dsn": entry.data.get(CONF_DSN, ""),
+            },
             errors=errors,
         )

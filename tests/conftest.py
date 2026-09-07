@@ -17,6 +17,7 @@ _HA_MODULES = [
     "homeassistant.exceptions",
     "homeassistant.helpers",
     "homeassistant.helpers.update_coordinator",
+    "homeassistant.helpers.issue_registry",
     "homeassistant.data_entry_flow",
     "homeassistant.components",
     "homeassistant.components.diagnostics",
@@ -54,7 +55,14 @@ class _ConfigFlowBase:
     def async_create_entry(self, *, title: str, data: dict) -> dict:
         return {"type": "create_entry", "title": title, "data": data}
 
-    def async_show_form(self, *, step_id: str, data_schema=None, errors=None, description_placeholders=None) -> dict:
+    def async_show_form(
+        self,
+        *,
+        step_id: str,
+        data_schema=None,
+        errors=None,
+        description_placeholders=None,
+    ) -> dict:
         return {
             "type": "form",
             "step_id": step_id,
@@ -64,6 +72,16 @@ class _ConfigFlowBase:
         }
 
     def async_show_menu(self, *, step_id: str, menu_options=None) -> dict:
+        # Mirrors a real HA check: Home Assistant validates that a menu's
+        # own step_id is a real async_step_* method (it re-checks this even
+        # though menu *selections* route straight to async_step_<chosen>,
+        # never back through this one) -- catches step-name typos/removals.
+        if not hasattr(self, f"async_step_{step_id}"):
+            raise AssertionError(
+                f"async_show_menu(step_id={step_id!r}) has no matching "
+                f"async_step_{step_id} method (Home Assistant requires it "
+                "to exist even though it won't be called on selection)"
+            )
         return {"type": "menu", "step_id": step_id, "menu_options": menu_options}
 
     def async_abort(self, *, reason: str) -> dict:
@@ -86,3 +104,46 @@ _exc_mod.ConfigEntryNotReady = type("ConfigEntryNotReady", (Exception,), {})
 _exc_mod.HomeAssistantError = type("HomeAssistantError", (Exception,), {})
 
 sys.modules["homeassistant.const"].Platform = MagicMock()
+
+
+class _UpdateFailed(Exception):
+    """Stand-in for HA's update_coordinator.UpdateFailed."""
+
+
+class _DataUpdateCoordinatorBase:
+    """Stand-in for HA's update_coordinator.DataUpdateCoordinator.
+
+    Real enough for tests: stores state, and `async_config_entry_first_refresh`
+    actually calls the subclass's `_async_update_data()` once.
+    """
+
+    def __init__(self, hass, logger, *, name, update_interval=None):
+        self.hass = hass
+        self.logger = logger
+        self.name = name
+        self.update_interval = update_interval
+        self.data = None
+        self.last_update_success = True
+
+    async def async_config_entry_first_refresh(self):
+        self.data = await self._async_update_data()
+        self.last_update_success = True
+
+
+_uc_mod = sys.modules["homeassistant.helpers.update_coordinator"]
+_uc_mod.DataUpdateCoordinator = _DataUpdateCoordinatorBase
+_uc_mod.UpdateFailed = _UpdateFailed
+
+
+class _IssueSeverity:
+    """Stand-in for HA's issue_registry.IssueSeverity enum."""
+
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+
+_ir_mod = sys.modules["homeassistant.helpers.issue_registry"]
+_ir_mod.IssueSeverity = _IssueSeverity
+_ir_mod.async_create_issue = MagicMock()
+_ir_mod.async_delete_issue = MagicMock()

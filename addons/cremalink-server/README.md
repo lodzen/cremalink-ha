@@ -8,6 +8,14 @@
 
 ---
 
+> [!WARNING]
+> **Deprecated for the Cremalink Home Assistant integration.** As of the
+> embedded local server feature, `cremalink_ha` no longer requires, installs,
+> or connects to this add-on — local mode now runs entirely in-process. This
+> add-on remains available only for non-Home-Assistant/standalone use of the
+> `cremalink` library. Existing add-on-based config entries are prompted to
+> reconfigure to the embedded server (see the main [README](../../README.md#-upgrading-from-the-add-on)).
+
 ## ✨ Overview
 
 This Home Assistant Add-on runs the **Cremalink Server**, which communicates directly with supported coffee machines over the local network. It exposes an API that the **Cremalink Integration** uses to monitor and control the machine.
