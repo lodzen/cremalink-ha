@@ -7,20 +7,25 @@ per-entry isolation), and the legacy-entry reconfigure-required path (US3).
 
 import asyncio
 import time
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import custom_components.cremalink_ha as init_mod
 import pytest
 from custom_components.cremalink_ha.const import (
     CONF_ADDON_URL,
+    CONF_ADVERTISED_IP,
     CONF_CONNECTION_MODE,
     CONF_CONNECTION_TYPE,
     CONF_DEVICE_IP,
     CONF_DEVICE_MAP,
     CONF_DSN,
     CONF_LAN_KEY,
+    CONF_MONITOR_POLL_INTERVAL,
     CONNECTION_LOCAL,
     CONNECTION_MODE_EMBEDDED,
+    DEFAULT_MONITOR_POLL_INTERVAL,
     DEVICE_NAME,
     DOMAIN,
 )
@@ -38,12 +43,21 @@ class _FakeEmbeddedServer:
     next_port = 10280
 
     def __init__(
-        self, dsn, device_ip, lan_key, device_map_path=None, advertised_ip=None
+        self,
+        dsn,
+        device_ip,
+        lan_key,
+        device_map_path=None,
+        advertised_ip=None,
+        monitor_poll_interval=5.0,
+        event_logger=None,
     ):
         self.dsn = dsn
         self.device_ip = device_ip
         self.lan_key = lan_key
         self.advertised_ip = advertised_ip or "192.168.1.100"
+        self.monitor_poll_interval = monitor_poll_interval
+        self.event_logger = event_logger
         self.bound_port = _FakeEmbeddedServer.next_port
         _FakeEmbeddedServer.next_port += 1
         self.state = "stopped"
@@ -55,6 +69,9 @@ class _FakeEmbeddedServer:
     async def stop(self):
         self.state = "stopped"
 
+    def get_recent_events(self):
+        return []
+
 
 class _FakeEntry:
     """Minimal ConfigEntry stand-in that actually runs on_unload callbacks."""
@@ -65,9 +82,14 @@ class _FakeEntry:
         self.entry_id = entry_id
         self.title = title
         self._unload_callbacks = []
+        self.update_listener = None
 
     def async_on_unload(self, callback):
         self._unload_callbacks.append(callback)
+
+    def add_update_listener(self, listener):
+        self.update_listener = listener
+        return lambda: None
 
     async def fire_unload_callbacks(self):
         for cb in reversed(self._unload_callbacks):
@@ -135,7 +157,48 @@ class TestEmbeddedModeSetup:
         stored = hass.data[DOMAIN][entry.entry_id]
         assert stored["embedded_server"] is server
         coordinator = stored["coordinator"]
+        assert server.monitor_poll_interval == DEFAULT_MONITOR_POLL_INTERVAL
+        assert coordinator.update_interval == timedelta(
+            seconds=DEFAULT_MONITOR_POLL_INTERVAL
+        )
         _run(coordinator._async_update_data())  # should not raise
+
+    def test_selected_interval_configures_server_and_coordinator(self):
+        hass = _make_hass()
+        entry = _FakeEntry(_local_entry_data())
+        entry.options = {
+            CONF_MONITOR_POLL_INTERVAL: 17,
+            CONF_ADVERTISED_IP: "192.168.178.96",
+        }
+
+        _run(init_mod.async_setup_entry(hass, entry))
+
+        stored = hass.data[DOMAIN][entry.entry_id]
+        assert stored["embedded_server"].monitor_poll_interval == 17
+        assert stored["embedded_server"].advertised_ip == "192.168.178.96"
+        assert stored["coordinator"].update_interval == timedelta(seconds=17)
+        assert entry.update_listener is init_mod._async_options_updated
+
+    def test_docker_setup_warns_when_advertised_ip_is_auto_detected(
+        self, monkeypatch, caplog
+    ):
+        monkeypatch.setattr(init_mod, "_is_docker_container", lambda: True)
+        hass = _make_hass()
+        entry = _FakeEntry(_local_entry_data())
+
+        _run(init_mod.async_setup_entry(hass, entry))
+
+        assert "auto-detected advertised IP 192.168.1.100" in caplog.text
+        assert "host LAN address" in caplog.text
+
+    def test_options_update_reloads_entry(self):
+        hass = _make_hass()
+        hass.config_entries.async_reload = AsyncMock(return_value=True)
+        entry = _FakeEntry(_local_entry_data())
+
+        _run(init_mod._async_options_updated(hass, entry))
+
+        hass.config_entries.async_reload.assert_awaited_once_with(entry.entry_id)
 
 
 class TestLifecycle:
@@ -216,6 +279,45 @@ class TestCoordinatorFailureSurfacing:
 
         with pytest.raises(UpdateFailed):
             _run(coordinator._async_update_data())
+
+    def test_cloud_coordinator_keeps_adaptive_cadence(self):
+        from custom_components.cremalink_ha.coordinator import (
+            SCAN_INTERVAL_FAST,
+            SCAN_INTERVAL_SLOW,
+        )
+
+        hass = _make_hass()
+        device = _FakeDevice()
+        coordinator = CremalinkCoordinator(hass, device)
+
+        _run(coordinator._async_update_data())
+        assert coordinator.update_interval == SCAN_INTERVAL_FAST
+
+        device.get_monitor = lambda: MagicMock(parsed={"status": 0})
+        _run(coordinator._async_update_data())
+        assert coordinator.update_interval == SCAN_INTERVAL_SLOW
+
+    def test_local_coordinator_logs_decoded_monitor_data(self, caplog):
+        hass = _make_hass()
+        device = _FakeDevice()
+        device.get_monitor = lambda: SimpleNamespace(
+            raw_b64="base64-monitor-frame",
+            parsed={"status": 2, "progress": 45},
+            received_at=datetime(2026, 9, 27, tzinfo=timezone.utc),
+            snapshot=SimpleNamespace(warnings=[], errors=[]),
+        )
+        server = _FakeEmbeddedServer("dsn", "ip", "key")
+        caplog.set_level("INFO", logger="custom_components.cremalink_ha.coordinator")
+        coordinator = CremalinkCoordinator(
+            hass, device, embedded_server=server, local_poll_interval=5
+        )
+
+        _run(coordinator._async_update_data())
+
+        assert "decoded_local_monitor" in caplog.text
+        assert "base64-monitor-frame" in caplog.text
+        assert '"status": 2' in caplog.text
+        assert '"progress": 45' in caplog.text
 
 
 class TestBoundedStop:

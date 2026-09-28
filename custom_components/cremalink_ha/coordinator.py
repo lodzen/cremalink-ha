@@ -1,11 +1,12 @@
 """Data update coordinator for the Cremalink integration."""
+
+import json
 import logging
 from datetime import timedelta
 
+from cremalink.domain.device import Device
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-
-from cremalink.domain.device import Device
 
 from .const import DOMAIN
 
@@ -14,10 +15,17 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL_FAST = timedelta(seconds=1)
 SCAN_INTERVAL_SLOW = timedelta(seconds=30)
 
+
 class CremalinkCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the Cremalink device."""
 
-    def __init__(self, hass: HomeAssistant, device: Device, embedded_server=None):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        device: Device,
+        embedded_server=None,
+        local_poll_interval: float | None = None,
+    ):
         """Initialize the coordinator.
 
         Args:
@@ -31,11 +39,15 @@ class CremalinkCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            # Poll the device every second for updates
-            update_interval=SCAN_INTERVAL_FAST,
+            update_interval=(
+                timedelta(seconds=local_poll_interval)
+                if local_poll_interval is not None
+                else SCAN_INTERVAL_FAST
+            ),
         )
         self.device = device
         self.embedded_server = embedded_server
+        self._adaptive_interval = local_poll_interval is None
 
     async def _async_update_data(self):
         """Fetch data from the device.
@@ -59,7 +71,33 @@ class CremalinkCoordinator(DataUpdateCoordinator):
         try:
             data = await self.hass.async_add_executor_job(self.device.get_monitor)
 
-            if data and hasattr(data, 'parsed') and isinstance(data.parsed, dict):
+            if (
+                self.embedded_server is not None
+                and data
+                and getattr(data, "raw_b64", None)
+            ):
+                snapshot = getattr(data, "snapshot", None)
+                _LOGGER.info(
+                    "decoded_local_monitor %s",
+                    json.dumps(
+                        {
+                            "received_at": getattr(data, "received_at", None),
+                            "raw_b64": data.raw_b64,
+                            "parsed": data.parsed,
+                            "warnings": getattr(snapshot, "warnings", []),
+                            "errors": getattr(snapshot, "errors", []),
+                        },
+                        sort_keys=True,
+                        default=str,
+                    ),
+                )
+
+            if (
+                self._adaptive_interval
+                and data
+                and hasattr(data, "parsed")
+                and isinstance(data.parsed, dict)
+            ):
                 status = data.parsed.get("status")
                 if status == 0:  # if in standby, poll slowly
                     self.update_interval = SCAN_INTERVAL_SLOW

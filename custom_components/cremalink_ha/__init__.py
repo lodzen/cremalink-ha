@@ -3,14 +3,16 @@
 import asyncio
 import logging
 from functools import partial
+from pathlib import Path
 
+from cremalink.local_server_app.embedded import EmbeddedLocalServer
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 
-from cremalink import Client, EmbeddedLocalServer, create_local_device, device_map
+from cremalink import Client, create_local_device, device_map
 
 from .const import *
 from .coordinator import CremalinkCoordinator
@@ -23,6 +25,11 @@ PLATFORMS = [Platform.SWITCH, Platform.BUTTON, Platform.SENSOR, Platform.BINARY_
 #: a stuck teardown must never block a reload/unload/removal indefinitely
 #: (research.md #7, tasks.md Phase 9).
 EMBEDDED_SERVER_STOP_TIMEOUT = 10.0
+
+
+def _is_docker_container() -> bool:
+    """Return whether the integration appears to run in a Docker container."""
+    return Path("/.dockerenv").is_file()
 
 
 async def _async_bounded_stop(embedded_server: EmbeddedLocalServer, dsn: str) -> None:
@@ -80,6 +87,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         True if the setup was successful, False otherwise.
     """
     connection_type = entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_LOCAL)
+    monitor_poll_interval = entry.options.get(
+        CONF_MONITOR_POLL_INTERVAL, DEFAULT_MONITOR_POLL_INTERVAL
+    )
 
     dsn = entry.data[CONF_DSN]
 
@@ -111,7 +121,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             lan_key = entry.data[CONF_LAN_KEY]
             device_ip = entry.data[CONF_DEVICE_IP]
-            advertised_ip = entry.data.get(CONF_ADVERTISED_IP)
+            advertised_ip = entry.options.get(
+                CONF_ADVERTISED_IP, entry.data.get(CONF_ADVERTISED_IP)
+            )
+            if isinstance(advertised_ip, str):
+                advertised_ip = advertised_ip.strip() or None
 
             embedded_server = EmbeddedLocalServer(
                 dsn=dsn,
@@ -119,8 +133,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 lan_key=lan_key,
                 device_map_path=str(map_path),
                 advertised_ip=advertised_ip,
+                monitor_poll_interval=monitor_poll_interval,
+                event_logger=_LOGGER,
             )
             await embedded_server.start()
+            if advertised_ip is None and _is_docker_container():
+                _LOGGER.warning(
+                    "Home Assistant is running in Docker and the embedded server "
+                    "auto-detected advertised IP %s. With bridge networking, this "
+                    "container address may not be reachable by the coffee machine; "
+                    "set the local Advertised IP option to the host LAN address.",
+                    embedded_server.advertised_ip,
+                )
 
             # Create the local device instance, pointed at our own
             # in-process server instead of an external add-on/CLI process.
@@ -160,7 +184,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await _async_bounded_stop(embedded_server, dsn)
         raise ConfigEntryNotReady(f"Could not connect to Cremalink device: {e}") from e
 
-    coordinator = CremalinkCoordinator(hass, device, embedded_server=embedded_server)
+    coordinator = CremalinkCoordinator(
+        hass,
+        device,
+        embedded_server=embedded_server,
+        local_poll_interval=(
+            monitor_poll_interval if embedded_server is not None else None
+        ),
+    )
     await coordinator.async_config_entry_first_refresh()
 
     if embedded_server is not None:
@@ -172,9 +203,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "device": device,
         "embedded_server": embedded_server,
     }
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the config entry after its polling options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

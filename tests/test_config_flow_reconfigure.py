@@ -92,6 +92,19 @@ def test_reconfigure_accepts_optional_advertised_ip_override():
     assert new_data[CONF_ADVERTISED_IP] == "10.0.0.5"
 
 
+def test_reconfigure_rejects_invalid_advertised_ip():
+    entry = _legacy_entry()
+    flow, hass = _make_flow(entry)
+
+    result = _run(
+        flow.async_step_reconfigure({CONF_ADVERTISED_IP: "192.168.178.999"})
+    )
+
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "invalid_advertised_ip"
+    hass.config_entries.async_update_entry.assert_not_called()
+
+
 def test_completing_reconfigure_rewrites_entry_and_reloads():
     entry = _legacy_entry()
     flow, hass = _make_flow(entry)

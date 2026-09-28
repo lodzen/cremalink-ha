@@ -1,4 +1,5 @@
 """Tests for diagnostics.py redaction of cloud-assisted onboarding secrets."""
+
 import asyncio
 from unittest.mock import MagicMock
 
@@ -37,13 +38,13 @@ def test_diagnostics_redacts_sensitive_fields():
 
     redacted = result["entry_data"]
     for key in REDACT_KEYS:
-        assert redacted[key] == "**REDACTED**"
-    assert redacted["dsn"] == "DSN1"
+        if key in entry.data:
+            assert redacted[key] == "**REDACTED**"
+    assert redacted["dsn"] == "**REDACTED**"
     assert redacted["device_map"] == "ECAM452"
 
 
-def test_diagnostics_surfaces_embedded_server_port_and_ip():
-    """bound_port/advertised_ip are not secrets and help debug fallback (FR-008)."""
+def test_diagnostics_redacts_embedded_server_ip_and_surfaces_port():
     entry = MagicMock()
     entry.data = {"dsn": "DSN1"}
     entry.options = {}
@@ -53,10 +54,27 @@ def test_diagnostics_surfaces_embedded_server_port_and_ip():
     embedded_server.state = "running"
     embedded_server.bound_port = 10281
     embedded_server.advertised_ip = "192.168.1.50"
+    embedded_server.monitor_poll_interval = 12
+    embedded_server.get_recent_events.return_value = [
+        {
+            "event": "monitor_datapoint",
+            "level": "INFO",
+            "ts": 1.0,
+            "details": {
+                "dsn": "DSN-SECRET",
+                "device_ip": "192.168.1.50",
+                "command": "secret-command",
+                "raw_value_len": 24,
+            },
+        }
+    ]
 
     hass = MagicMock()
     coordinator = MagicMock()
-    coordinator.data = {}
+    coordinator.data = {
+        "raw_b64": "clear-monitor-frame",
+        "parsed": {"status": 2},
+    }
     hass.data = {
         DOMAIN: {
             "entry1": {"coordinator": coordinator, "embedded_server": embedded_server}
@@ -68,5 +86,47 @@ def test_diagnostics_surfaces_embedded_server_port_and_ip():
     assert result["embedded_server"] == {
         "state": "running",
         "bound_port": 10281,
-        "advertised_ip": "192.168.1.50",
+        "advertised_ip": "**REDACTED**",
+        "monitor_poll_interval": 12,
+        "recent_events": [
+            {
+                "event": "monitor_datapoint",
+                "level": "INFO",
+                "ts": 1.0,
+                "details": {
+                    "dsn": "**REDACTED**",
+                    "device_ip": "**REDACTED**",
+                    "command": "**REDACTED**",
+                    "raw_value_len": 24,
+                },
+            }
+        ],
     }
+    assert result["coordinator_data"] is None
+
+
+def test_diagnostics_bounds_recent_embedded_events():
+    entry = MagicMock()
+    entry.data = {"dsn": "DSN1"}
+    entry.options = {}
+    entry.entry_id = "entry1"
+
+    embedded_server = MagicMock()
+    embedded_server.get_recent_events.return_value = [
+        {"event": f"event-{index}", "details": {}} for index in range(60)
+    ]
+    hass = MagicMock()
+    coordinator = MagicMock()
+    coordinator.data = {}
+    hass.data = {
+        DOMAIN: {
+            "entry1": {"coordinator": coordinator, "embedded_server": embedded_server}
+        }
+    }
+
+    result = _run(async_get_config_entry_diagnostics(hass, entry))
+
+    events = result["embedded_server"]["recent_events"]
+    assert len(events) == 50
+    assert events[0]["event"] == "event-10"
+    assert events[-1]["event"] == "event-59"

@@ -10,13 +10,19 @@ from unittest.mock import MagicMock
 
 import pytest
 from custom_components.cremalink_ha import config_flow as cf_mod
-from custom_components.cremalink_ha.config_flow import CremalinkConfigFlow
+from custom_components.cremalink_ha.config_flow import (
+    CremalinkConfigFlow,
+    CremalinkOptionsFlow,
+)
 from custom_components.cremalink_ha.const import (
+    CONF_ADVERTISED_IP,
     CONF_CONNECTION_TYPE,
     CONF_DEVICE_MAP,
     CONF_DSN,
+    CONF_MONITOR_POLL_INTERVAL,
     CONNECTION_CLOUD,
     CONNECTION_LOCAL,
+    DEFAULT_MONITOR_POLL_INTERVAL,
 )
 
 
@@ -205,6 +211,99 @@ class TestCloudLoginStep:
         assert result["step_id"] == "manual"
 
 
+class TestPollingOptionsFlow:
+    def _make_options_flow(self, connection_type=CONNECTION_LOCAL, options=None):
+        entry = MagicMock()
+        entry.data = {CONF_CONNECTION_TYPE: connection_type}
+        entry.options = options or {}
+        flow = CremalinkOptionsFlow()
+        flow.config_entry = entry
+        return flow
+
+    def test_local_options_form_exposes_default_interval(self):
+        flow = self._make_options_flow()
+
+        result = _run(flow.async_step_init())
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "init"
+        schema = result["data_schema"].schema
+        interval_key = next(
+            key for key in schema if key.schema == CONF_MONITOR_POLL_INTERVAL
+        )
+        assert interval_key.default() == DEFAULT_MONITOR_POLL_INTERVAL
+
+    def test_local_options_form_defaults_advertised_ip_from_entry(self):
+        flow = self._make_options_flow()
+        flow.config_entry.data[CONF_ADVERTISED_IP] = "192.168.178.96"
+
+        result = _run(flow.async_step_init())
+
+        schema = result["data_schema"].schema
+        advertised_ip_key = next(
+            key for key in schema if key.schema == CONF_ADVERTISED_IP
+        )
+        assert advertised_ip_key.default() == "192.168.178.96"
+
+    def test_local_options_save_interval(self):
+        flow = self._make_options_flow()
+
+        result = _run(flow.async_step_init({CONF_MONITOR_POLL_INTERVAL: 12}))
+
+        assert result == {
+            "type": "create_entry",
+            "title": "",
+            "data": {CONF_MONITOR_POLL_INTERVAL: 12},
+        }
+
+    def test_local_options_reject_out_of_range_interval(self):
+        flow = self._make_options_flow()
+
+        result = _run(flow.async_step_init({CONF_MONITOR_POLL_INTERVAL: 0}))
+
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "invalid_monitor_poll_interval"
+
+    def test_local_options_save_valid_advertised_ip(self):
+        flow = self._make_options_flow()
+
+        result = _run(
+            flow.async_step_init(
+                {
+                    CONF_MONITOR_POLL_INTERVAL: 12,
+                    CONF_ADVERTISED_IP: " 192.168.178.96 ",
+                }
+            )
+        )
+
+        assert result["data"] == {
+            CONF_MONITOR_POLL_INTERVAL: 12,
+            CONF_ADVERTISED_IP: "192.168.178.96",
+        }
+
+    def test_local_options_reject_invalid_advertised_ip(self):
+        flow = self._make_options_flow()
+
+        result = _run(
+            flow.async_step_init(
+                {
+                    CONF_MONITOR_POLL_INTERVAL: 12,
+                    CONF_ADVERTISED_IP: "192.168.178.999",
+                }
+            )
+        )
+
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "invalid_advertised_ip"
+
+    def test_cloud_options_are_not_supported(self):
+        flow = self._make_options_flow(connection_type=CONNECTION_CLOUD)
+
+        result = _run(flow.async_step_init())
+
+        assert result == {"type": "abort", "reason": "local_only"}
+
+
 class TestModelDetectionFallback:
     def test_unresolved_model_routes_to_manual_map_prefilled(
         self, tmp_path, monkeypatch
@@ -293,6 +392,7 @@ class TestManualLocalSetup:
                     "dsn": "DSN9",
                     "lan_key": "key9",
                     "device_ip": "192.168.1.9",
+                    "advertised_ip": "192.168.178.96",
                     "device_map": "ECAM452",
                 }
             )
@@ -301,6 +401,27 @@ class TestManualLocalSetup:
         assert result["type"] == "create_entry"
         assert "addon_url" not in result["data"]
         assert result["data"]["connection_mode"] == "embedded"
+        assert result["data"]["advertised_ip"] == "192.168.178.96"
+
+    def test_device_step_rejects_invalid_advertised_ip(self, tmp_path):
+        flow = _make_flow(_make_hass(tmp_path))
+        _run(flow.async_step_device())
+
+        result = _run(
+            flow.async_step_device(
+                {
+                    "device_name": "My Machine",
+                    "dsn": "DSN9",
+                    "lan_key": "key9",
+                    "device_ip": "192.168.1.9",
+                    "advertised_ip": "192.168.178.999",
+                    "device_map": "ECAM452",
+                }
+            )
+        )
+
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "invalid_advertised_ip"
 
     def test_choose_connection_menu_step_exists_and_matches_option_keys(self, tmp_path):
         """Regression test: Home Assistant requires a menu's own step_id to

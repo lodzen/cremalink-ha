@@ -2,10 +2,10 @@
 
 **The official Home Assistant integration for monitoring and controlling IoT coffee machines via Cremalink.**
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fmiditkl%2Fcremalink-ha)
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?category=integration&repository=cremalink-ha&owner=miditkl)
-[![License](https://img.shields.io/github/license/miditkl/cremalink-ha?style=for-the-badge&color=success)](LICENSE)
-[![Source Code](https://img.shields.io/badge/Source-GitHub-black?style=for-the-badge&logo=github)](https://github.com/miditkl/cremalink-ha)
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Flodzen%2Fcremalink-ha)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?category=integration&repository=cremalink-ha&owner=lodzen)
+[![License](https://img.shields.io/github/license/lodzen/cremalink-ha?style=for-the-badge&color=success)](LICENSE)
+[![Source Code](https://img.shields.io/badge/Source-GitHub-black?style=for-the-badge&logo=github)](https://github.com/lodzen/cremalink-ha)
 
 ---
 
@@ -19,7 +19,7 @@ This integration connects your Home Assistant instance to the **Cremalink** ecos
 > The goal is to make the library fully generic. If you encounter issues with other machines, contributions are highly encouraged!
 
 > [!NOTE]
-> **cremalink-ha** acts solely as a bridge to Home Assistant. Device management (e.g., adding new machines) is handled exclusively via the main **[cremalink](https://github.com/miditkl/cremalink)** project. Please set up your devices there before using this integration.
+> **cremalink-ha** acts solely as a bridge to Home Assistant. Device management (e.g., adding new machines) is handled exclusively via the main **[cremalink](https://github.com/lodzen/cremalink)** project. Please set up your devices there before using this integration.
 ---
 
 ## 🚀 Installation
@@ -99,13 +99,13 @@ Assistant itself in any of these scenarios.
 
 ## 🤝 Contributing
 
-Contributions are welcome! If you have a machine profile not yet supported, please check the [Project Wiki of the official cremalink repository](https://github.com/miditkl/cremalink/wiki/) on how to add new definitions.
+Contributions are welcome! If you have a machine profile not yet supported, please check the [Project Wiki of the official cremalink repository](https://github.com/lodzen/cremalink/wiki/) on how to add new definitions.
 
 ---
 
 ## 💫 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=miditkl/cremalink-ha&type=date&logscale&legend=top-left)](https://www.star-history.com/#miditkl/cremalink-ha&type=date&logscale&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=lodzen/cremalink-ha&type=date&logscale&legend=top-left)](https://www.star-history.com/#lodzen/cremalink-ha&type=date&logscale&legend=top-left)
 
 ## 📄 License
 

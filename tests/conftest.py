@@ -13,6 +13,7 @@ _HA_MODULES = [
     "homeassistant",
     "homeassistant.core",
     "homeassistant.config_entries",
+    "homeassistant.helpers.selector",
     "homeassistant.const",
     "homeassistant.exceptions",
     "homeassistant.helpers",
@@ -90,6 +91,13 @@ class _ConfigFlowBase:
 
 _ce_mod = sys.modules["homeassistant.config_entries"]
 _ce_mod.ConfigFlow = _ConfigFlowBase
+
+
+class _OptionsFlowBase(_ConfigFlowBase):
+    """Stand-in for Home Assistant's OptionsFlow base."""
+
+
+_ce_mod.OptionsFlow = _OptionsFlowBase
 
 _ha_mod = sys.modules["homeassistant"]
 _ha_mod.config_entries = _ce_mod

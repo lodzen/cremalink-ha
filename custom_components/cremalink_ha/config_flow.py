@@ -3,18 +3,34 @@
 import json
 import logging
 import os
+from ipaddress import IPv4Address
 
 import voluptuous as vol
+from cremalink.clients.auth import authenticate_cloud
 from cremalink.devices import get_device_maps, load_device_map
+from cremalink.domain.model_detection import detect_model_id
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry, OptionsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.selector import (
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
-from cremalink import Client, authenticate_cloud, detect_model_id
+from cremalink import Client
 
 from .const import *
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _normalize_advertised_ip(value: str | None) -> str | None:
+    """Normalize an optional IPv4 override, rejecting malformed addresses."""
+    if not value or not value.strip():
+        return None
+    return str(IPv4Address(value.strip()))
 
 
 def get_available_maps(hass: HomeAssistant) -> list[str]:
@@ -101,9 +117,11 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return temp_file, raw_devices, coffee_devices
 
                 try:
-                    temp_file, raw_devices, coffee_devices = (
-                        await self.hass.async_add_executor_job(_login_and_discover)
-                    )
+                    (
+                        temp_file,
+                        raw_devices,
+                        coffee_devices,
+                    ) = await self.hass.async_add_executor_job(_login_and_discover)
                 except Exception as e:
                     _LOGGER.error("Cloud login failed: %s", e)
                     errors["base"] = "auth_failed"
@@ -321,8 +339,33 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         errors = {}
         maps = await self.hass.async_add_executor_job(get_available_maps, self.hass)
+        schema = {
+            vol.Required(DEVICE_NAME): str,
+            vol.Required(CONF_DSN): str,
+            vol.Required(CONF_LAN_KEY): str,
+            vol.Required(CONF_DEVICE_IP): str,
+            vol.Optional(CONF_ADVERTISED_IP): str,
+        }
+        if not self._selected_map:
+            schema[vol.Required(CONF_DEVICE_MAP)] = vol.In(maps) if maps else str
 
         if user_input:
+            raw_advertised_ip = user_input.get(CONF_ADVERTISED_IP)
+            if raw_advertised_ip:
+                try:
+                    user_input[CONF_ADVERTISED_IP] = _normalize_advertised_ip(
+                        raw_advertised_ip
+                    )
+                except ValueError:
+                    errors["base"] = "invalid_advertised_ip"
+
+            if errors:
+                return self.async_show_form(
+                    step_id="device",
+                    data_schema=vol.Schema(schema),
+                    errors=errors,
+                )
+
             user_input[CONF_CONNECTION_TYPE] = CONNECTION_LOCAL
             user_input[CONF_CONNECTION_MODE] = CONNECTION_MODE_EMBEDDED
 
@@ -335,15 +378,6 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_create_entry(
                 title=f"{user_input[DEVICE_NAME]}", data=user_input
             )
-
-        schema = {
-            vol.Required(DEVICE_NAME): str,
-            vol.Required(CONF_DSN): str,
-            vol.Required(CONF_LAN_KEY): str,
-            vol.Required(CONF_DEVICE_IP): str,
-        }
-        if not self._selected_map:
-            schema[vol.Required(CONF_DEVICE_MAP)] = vol.In(maps) if maps else str
 
         return self.async_show_form(
             step_id="device",
@@ -477,13 +511,25 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             new_data = dict(entry.data)
             new_data.pop(CONF_ADDON_URL, None)
             new_data[CONF_CONNECTION_MODE] = CONNECTION_MODE_EMBEDDED
-            if user_input.get(CONF_ADVERTISED_IP):
-                new_data[CONF_ADVERTISED_IP] = user_input[CONF_ADVERTISED_IP]
+            try:
+                advertised_ip = _normalize_advertised_ip(
+                    user_input.get(CONF_ADVERTISED_IP)
+                )
+            except ValueError:
+                errors["base"] = "invalid_advertised_ip"
+            else:
+                if advertised_ip is None:
+                    new_data.pop(CONF_ADVERTISED_IP, None)
+                else:
+                    new_data[CONF_ADVERTISED_IP] = advertised_ip
 
-            self.hass.config_entries.async_update_entry(entry, data=new_data)
-            await self.hass.config_entries.async_reload(entry.entry_id)
-            ir.async_delete_issue(self.hass, DOMAIN, f"reconfigure_{entry.entry_id}")
-            return self.async_abort(reason="reconfigure_successful")
+            if not errors:
+                self.hass.config_entries.async_update_entry(entry, data=new_data)
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                ir.async_delete_issue(
+                    self.hass, DOMAIN, f"reconfigure_{entry.entry_id}"
+                )
+                return self.async_abort(reason="reconfigure_successful")
 
         return self.async_show_form(
             step_id="reconfigure",
@@ -493,5 +539,87 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 or entry.data.get(CONF_DSN, ""),
                 "dsn": entry.data.get(CONF_DSN, ""),
             },
+            errors=errors,
+        )
+
+    @staticmethod
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Create the local polling options flow."""
+        return CremalinkOptionsFlow()
+
+
+class CremalinkOptionsFlow(OptionsFlow):
+    """Configure local polling and advertised IP for a Cremalink entry."""
+
+    async def async_step_init(self, user_input=None):
+        """Show and save local polling and advertised-IP settings."""
+        if (
+            self.config_entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_LOCAL)
+            != CONNECTION_LOCAL
+        ):
+            return self.async_abort(reason="local_only")
+
+        errors = {}
+        if user_input is not None:
+            interval = user_input.get(CONF_MONITOR_POLL_INTERVAL)
+            if (
+                isinstance(interval, bool)
+                or not isinstance(interval, (int, float))
+                or interval < MIN_MONITOR_POLL_INTERVAL
+                or interval > MAX_MONITOR_POLL_INTERVAL
+                or not float(interval).is_integer()
+            ):
+                errors["base"] = "invalid_monitor_poll_interval"
+
+            raw_advertised_ip = user_input.get(CONF_ADVERTISED_IP)
+            try:
+                advertised_ip = _normalize_advertised_ip(raw_advertised_ip)
+            except ValueError:
+                advertised_ip = None
+                errors["base"] = "invalid_advertised_ip"
+
+            if not errors:
+                options = {CONF_MONITOR_POLL_INTERVAL: int(interval)}
+                if CONF_ADVERTISED_IP in user_input:
+                    options[CONF_ADVERTISED_IP] = advertised_ip
+                elif CONF_ADVERTISED_IP in self.config_entry.options:
+                    options[CONF_ADVERTISED_IP] = self.config_entry.options[
+                        CONF_ADVERTISED_IP
+                    ]
+                elif CONF_ADVERTISED_IP in self.config_entry.data:
+                    options[CONF_ADVERTISED_IP] = self.config_entry.data[
+                        CONF_ADVERTISED_IP
+                    ]
+                return self.async_create_entry(
+                    title="",
+                    data=options,
+                )
+
+        current_interval = self.config_entry.options.get(
+            CONF_MONITOR_POLL_INTERVAL, DEFAULT_MONITOR_POLL_INTERVAL
+        )
+        current_advertised_ip = self.config_entry.options.get(
+            CONF_ADVERTISED_IP,
+            self.config_entry.data.get(CONF_ADVERTISED_IP, ""),
+        ) or ""
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_MONITOR_POLL_INTERVAL, default=current_interval
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=MIN_MONITOR_POLL_INTERVAL,
+                            max=MAX_MONITOR_POLL_INTERVAL,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_ADVERTISED_IP, default=current_advertised_ip
+                    ): str,
+                }
+            ),
             errors=errors,
         )

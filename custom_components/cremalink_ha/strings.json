@@ -55,7 +55,11 @@
           "dsn": "Device Serial Number (DSN)",
           "lan_key": "LAN Key",
           "device_ip": "IP-Address of coffee machine",
+          "advertised_ip": "Host IP address advertised to coffee machine (optional)",
           "device_map": "Device Map"
+        },
+        "data_description": {
+          "advertised_ip": "Enter the host's LAN IPv4 address when Home Assistant runs in Docker bridge networking. Leave blank to auto-detect."
         }
       },
       "reconfigure": {
@@ -72,11 +76,34 @@
       "missing_credentials": "Please enter both email and password, or check Advanced setup.",
       "no_devices": "No devices found on this account.",
       "no_coffee_machine": "This account has devices, but none of them are recognized as a coffee machine.",
-      "unknown": "Unknown error occurred"
+      "unknown": "Unknown error occurred",
+      "invalid_advertised_ip": "Enter a valid IPv4 address."
     },
     "abort": {
       "already_configured": "Device is already configured.",
       "reconfigure_successful": "Device switched to the built-in local server."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Local connection settings",
+        "description": "Set the polling interval and the IP address the coffee machine should use to reach this Home Assistant instance.",
+        "data": {
+          "monitor_poll_interval": "Polling interval (seconds)",
+          "advertised_ip": "Advertised IP (optional)"
+        },
+        "data_description": {
+          "advertised_ip": "Enter the host's LAN IPv4 address when using Docker bridge networking. The coffee machine must be able to reach this address. Leave blank to auto-detect."
+        }
+      }
+    },
+    "error": {
+      "invalid_monitor_poll_interval": "Enter a whole number between 1 and 60 seconds.",
+      "invalid_advertised_ip": "Enter a valid IPv4 address."
+    },
+    "abort": {
+      "local_only": "These options are available only for local connections."
     }
   },
   "issues": {

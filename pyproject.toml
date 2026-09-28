@@ -5,7 +5,7 @@ description = "Cremalink for Home-Assistant Add-on & Integration"
 requires-python = ">=3.13.2"
 dependencies = [
     "homeassistant>=2026.2.3",
-    "cremalink==0.1.0b26"
+    "cremalink-lodzen==0.2.0b2"
 ]
 
 [tool.pytest.ini_options]
