@@ -1,7 +1,7 @@
 name: "Cremalink for Home-Assistant"
-description: "Runs the Cremalink local server from the PyPI cremalink package."
+description: "[DEPRECATED for cremalink_ha — local mode is now embedded in the integration; this add-on is only needed for standalone/non-HA use of cremalink.] Runs the Cremalink local server from the PyPI cremalink package."
 version: "v0.1.0b26"
-url: "https://github.com/miditkl/cremalink-ha"
+url: "https://github.com/lodzen/cremalink-ha"
 slug: "cremalink_server"
 init: false
 arch:

@@ -2,11 +2,19 @@
 
 **Run the local Cremalink server directly within Home Assistant to bridge your coffee machine.**
 
-[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fmiditkl%2Fcremalink-ha)
-[![License](https://img.shields.io/github/license/miditkl/cremalink-ha?style=for-the-badge&color=success)](LICENSE)
-[![Source Code](https://img.shields.io/badge/Source-GitHub-black?style=for-the-badge&logo=github)](https://github.com/miditkl/cremalink-ha)
+[![Open your Home Assistant instance and show the add add-on repository dialog with a specific repository URL pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Flodzen%2Fcremalink-ha)
+[![License](https://img.shields.io/github/license/lodzen/cremalink-ha?style=for-the-badge&color=success)](LICENSE)
+[![Source Code](https://img.shields.io/badge/Source-GitHub-black?style=for-the-badge&logo=github)](https://github.com/lodzen/cremalink-ha)
 
 ---
+
+> [!WARNING]
+> **Deprecated for the Cremalink Home Assistant integration.** As of the
+> embedded local server feature, `cremalink_ha` no longer requires, installs,
+> or connects to this add-on — local mode now runs entirely in-process. This
+> add-on remains available only for non-Home-Assistant/standalone use of the
+> `cremalink` library. Existing add-on-based config entries are prompted to
+> reconfigure to the embedded server (see the main [README](../../README.md#-upgrading-from-the-add-on)).
 
 ## ✨ Overview
 
@@ -18,7 +26,7 @@ This Home Assistant Add-on runs the **Cremalink Server**, which communicates dir
 > The goal is to make the library fully generic. If you encounter issues with other machines, contributions are highly encouraged!
 
 > [!NOTE]
-> **cremalink-ha** acts solely as a bridge to Home Assistant. Device management (e.g., adding new machines) is handled exclusively via the main **[cremalink](https://github.com/miditkl/cremalink)** project. Please set up your devices there before using this integration.
+> **cremalink-ha** acts solely as a bridge to Home Assistant. Device management (e.g., adding new machines) is handled exclusively via the main **[cremalink](https://github.com/lodzen/cremalink)** project. Please set up your devices there before using this integration.
 
 ---
 
@@ -27,7 +35,7 @@ This Home Assistant Add-on runs the **Cremalink Server**, which communicates dir
 ### 1. Installation
 
 1.  Click the badge above or navigate to **Settings** > **Add-ons** > **Add-on Store**.
-2.  Add the repository URL: `https://github.com/miditkl/cremalink-ha`
+2.  Add the repository URL: `https://github.com/lodzen/cremalink-ha`
 3.  Install **Cremalink for Home-Assistant**.
 4.  Start the add-on.
 
