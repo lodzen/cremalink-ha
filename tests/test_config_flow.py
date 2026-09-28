@@ -19,10 +19,8 @@ from custom_components.cremalink_ha.const import (
     CONF_CONNECTION_TYPE,
     CONF_DEVICE_MAP,
     CONF_DSN,
-    CONF_MONITOR_POLL_INTERVAL,
     CONNECTION_CLOUD,
     CONNECTION_LOCAL,
-    DEFAULT_MONITOR_POLL_INTERVAL,
 )
 
 
@@ -68,8 +66,9 @@ class _FakeClient:
         "status": None,
     }
 
-    def __init__(self, token_path):
+    def __init__(self, token_path, logger=None):
         self.token_path = token_path
+        self.logger = logger
 
     def get_devices(self):
         return _FakeClient.raw_devices
@@ -211,7 +210,7 @@ class TestCloudLoginStep:
         assert result["step_id"] == "manual"
 
 
-class TestPollingOptionsFlow:
+class TestAdvertisedIPOptionsFlow:
     def _make_options_flow(self, connection_type=CONNECTION_LOCAL, options=None):
         entry = MagicMock()
         entry.data = {CONF_CONNECTION_TYPE: connection_type}
@@ -220,7 +219,7 @@ class TestPollingOptionsFlow:
         flow.config_entry = entry
         return flow
 
-    def test_local_options_form_exposes_default_interval(self):
+    def test_local_options_form_has_no_polling_control(self):
         flow = self._make_options_flow()
 
         result = _run(flow.async_step_init())
@@ -228,10 +227,9 @@ class TestPollingOptionsFlow:
         assert result["type"] == "form"
         assert result["step_id"] == "init"
         schema = result["data_schema"].schema
-        interval_key = next(
-            key for key in schema if key.schema == CONF_MONITOR_POLL_INTERVAL
-        )
-        assert interval_key.default() == DEFAULT_MONITOR_POLL_INTERVAL
+        schema_keys = {key.schema for key in schema}
+        assert CONF_ADVERTISED_IP in schema_keys
+        assert "monitor_poll_interval" not in schema_keys
 
     def test_local_options_form_defaults_advertised_ip_from_entry(self):
         flow = self._make_options_flow()
@@ -245,39 +243,20 @@ class TestPollingOptionsFlow:
         )
         assert advertised_ip_key.default() == "192.168.178.96"
 
-    def test_local_options_save_interval(self):
-        flow = self._make_options_flow()
-
-        result = _run(flow.async_step_init({CONF_MONITOR_POLL_INTERVAL: 12}))
-
-        assert result == {
-            "type": "create_entry",
-            "title": "",
-            "data": {CONF_MONITOR_POLL_INTERVAL: 12},
-        }
-
-    def test_local_options_reject_out_of_range_interval(self):
-        flow = self._make_options_flow()
-
-        result = _run(flow.async_step_init({CONF_MONITOR_POLL_INTERVAL: 0}))
-
-        assert result["type"] == "form"
-        assert result["errors"]["base"] == "invalid_monitor_poll_interval"
-
-    def test_local_options_save_valid_advertised_ip(self):
-        flow = self._make_options_flow()
+    def test_save_drops_legacy_polling_option_and_preserves_advertised_ip(self):
+        flow = self._make_options_flow(
+            options={"monitor_poll_interval": 12, CONF_ADVERTISED_IP: "10.0.0.2"}
+        )
 
         result = _run(
             flow.async_step_init(
                 {
-                    CONF_MONITOR_POLL_INTERVAL: 12,
                     CONF_ADVERTISED_IP: " 192.168.178.96 ",
                 }
             )
         )
 
         assert result["data"] == {
-            CONF_MONITOR_POLL_INTERVAL: 12,
             CONF_ADVERTISED_IP: "192.168.178.96",
         }
 
@@ -287,7 +266,6 @@ class TestPollingOptionsFlow:
         result = _run(
             flow.async_step_init(
                 {
-                    CONF_MONITOR_POLL_INTERVAL: 12,
                     CONF_ADVERTISED_IP: "192.168.178.999",
                 }
             )

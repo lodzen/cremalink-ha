@@ -5,14 +5,19 @@ import logging
 from functools import partial
 from pathlib import Path
 
-from cremalink.local_server_app.embedded import EmbeddedLocalServer
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 
-from cremalink import Client, create_local_device, device_map
+from cremalink import (
+    Client,
+    EmbeddedLocalServer,
+    create_local_device,
+    device_map,
+    log_event,
+)
 
 from .const import *
 from .coordinator import CremalinkCoordinator
@@ -38,10 +43,10 @@ async def _async_bounded_stop(embedded_server: EmbeddedLocalServer, dsn: str) ->
         async with asyncio.timeout(EMBEDDED_SERVER_STOP_TIMEOUT):
             await embedded_server.stop()
     except TimeoutError:
-        _LOGGER.warning(
-            "Embedded local server for %s did not stop within %.0fs; continuing anyway",
-            dsn,
-            EMBEDDED_SERVER_STOP_TIMEOUT,
+        embedded_server.log(
+            "embedded_server_stop_timeout",
+            {"dsn": dsn, "timeout_seconds": EMBEDDED_SERVER_STOP_TIMEOUT},
+            level=logging.WARNING,
         )
 
 
@@ -87,9 +92,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         True if the setup was successful, False otherwise.
     """
     connection_type = entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_LOCAL)
-    monitor_poll_interval = entry.options.get(
-        CONF_MONITOR_POLL_INTERVAL, DEFAULT_MONITOR_POLL_INTERVAL
-    )
 
     dsn = entry.data[CONF_DSN]
 
@@ -104,7 +106,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             map_path = await hass.async_add_executor_job(device_map, map_selection)
 
     except Exception as e:
-        _LOGGER.error("Could not resolve device map '%s': %s", map_selection, e)
+        log_event(
+            _LOGGER,
+            "device_map_resolve_failed",
+            {"device_map": map_selection, "error_type": type(e).__name__},
+            level=logging.ERROR,
+        )
         return False
 
     embedded_server: EmbeddedLocalServer | None = None
@@ -133,17 +140,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 lan_key=lan_key,
                 device_map_path=str(map_path),
                 advertised_ip=advertised_ip,
-                monitor_poll_interval=monitor_poll_interval,
+                monitor_poll_interval=DEFAULT_MONITOR_POLL_INTERVAL,
+                nudger_poll_interval=DEFAULT_NUDGER_POLL_INTERVAL,
                 event_logger=_LOGGER,
             )
             await embedded_server.start()
             if advertised_ip is None and _is_docker_container():
-                _LOGGER.warning(
-                    "Home Assistant is running in Docker and the embedded server "
-                    "auto-detected advertised IP %s. With bridge networking, this "
-                    "container address may not be reachable by the coffee machine; "
-                    "set the local Advertised IP option to the host LAN address.",
-                    embedded_server.advertised_ip,
+                embedded_server.log(
+                    "advertised_ip_auto_detected_in_docker",
+                    {
+                        "advertised_ip": embedded_server.advertised_ip,
+                        "bridge_networking_may_be_unreachable": True,
+                    },
+                    level=logging.WARNING,
                 )
 
             # Create the local device instance, pointed at our own
@@ -157,13 +166,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     device_ip=device_ip,
                     lan_key=lan_key,
                     device_map_path=str(map_path),
+                    event_logger=embedded_server.event_logger,
                 )
             )
         elif connection_type == CONNECTION_CLOUD:
             token_file = entry.data[CONF_TOKEN_FILE]
 
             def _create_cloud_device():
-                client = Client(token_file)
+                client = Client(token_file, logger=_LOGGER)
                 return client.get_device(dsn, device_map_path=str(map_path))
 
             device = await hass.async_add_executor_job(_create_cloud_device)
@@ -172,7 +182,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 raise ConfigEntryNotReady(f"Could not find cloud device with DSN {dsn}")
 
         else:
-            _LOGGER.error("Unknown connection type: %s", connection_type)
+            log_event(
+                _LOGGER,
+                "unknown_connection_type",
+                {"connection_type": connection_type},
+                level=logging.ERROR,
+            )
             return False
         # Configure the device
         await hass.async_add_executor_job(device.configure)
@@ -188,8 +203,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         device,
         embedded_server=embedded_server,
-        local_poll_interval=(
-            monitor_poll_interval if embedded_server is not None else None
+        monitor_poll_interval=(
+            DEFAULT_MONITOR_POLL_INTERVAL if embedded_server is not None else None
         ),
     )
     await coordinator.async_config_entry_first_refresh()
@@ -210,7 +225,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the config entry after its polling options change."""
+    """Reload the config entry after its local options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 

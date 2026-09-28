@@ -6,6 +6,7 @@ per-entry isolation), and the legacy-entry reconfigure-required path (US3).
 """
 
 import asyncio
+import logging
 import time
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -22,10 +23,10 @@ from custom_components.cremalink_ha.const import (
     CONF_DEVICE_MAP,
     CONF_DSN,
     CONF_LAN_KEY,
-    CONF_MONITOR_POLL_INTERVAL,
     CONNECTION_LOCAL,
     CONNECTION_MODE_EMBEDDED,
     DEFAULT_MONITOR_POLL_INTERVAL,
+    DEFAULT_NUDGER_POLL_INTERVAL,
     DEVICE_NAME,
     DOMAIN,
 )
@@ -50,6 +51,7 @@ class _FakeEmbeddedServer:
         device_map_path=None,
         advertised_ip=None,
         monitor_poll_interval=5.0,
+        nudger_poll_interval=1.0,
         event_logger=None,
     ):
         self.dsn = dsn
@@ -57,7 +59,10 @@ class _FakeEmbeddedServer:
         self.lan_key = lan_key
         self.advertised_ip = advertised_ip or "192.168.1.100"
         self.monitor_poll_interval = monitor_poll_interval
+        self.nudger_poll_interval = nudger_poll_interval
+        self.rekey_interval_seconds = 60.0
         self.event_logger = event_logger
+        self.telemetry_events = []
         self.bound_port = _FakeEmbeddedServer.next_port
         _FakeEmbeddedServer.next_port += 1
         self.state = "stopped"
@@ -71,6 +76,14 @@ class _FakeEmbeddedServer:
 
     def get_recent_events(self):
         return []
+
+    def log(self, event, details=None, *, level=logging.INFO):
+        logging.getLogger("custom_components.cremalink_ha").log(
+            level, "%s details=%s", event, details
+        )
+
+    def log_telemetry(self, event, details):
+        self.telemetry_events.append((event, details))
 
 
 class _FakeEntry:
@@ -158,25 +171,28 @@ class TestEmbeddedModeSetup:
         assert stored["embedded_server"] is server
         coordinator = stored["coordinator"]
         assert server.monitor_poll_interval == DEFAULT_MONITOR_POLL_INTERVAL
+        assert server.nudger_poll_interval == DEFAULT_NUDGER_POLL_INTERVAL
+        assert server.rekey_interval_seconds == 60.0
         assert coordinator.update_interval == timedelta(
             seconds=DEFAULT_MONITOR_POLL_INTERVAL
         )
         _run(coordinator._async_update_data())  # should not raise
 
-    def test_selected_interval_configures_server_and_coordinator(self):
+    def test_legacy_interval_option_is_ignored(self):
         hass = _make_hass()
         entry = _FakeEntry(_local_entry_data())
         entry.options = {
-            CONF_MONITOR_POLL_INTERVAL: 17,
+            "monitor_poll_interval": 17,
             CONF_ADVERTISED_IP: "192.168.178.96",
         }
 
         _run(init_mod.async_setup_entry(hass, entry))
 
         stored = hass.data[DOMAIN][entry.entry_id]
-        assert stored["embedded_server"].monitor_poll_interval == 17
+        assert stored["embedded_server"].monitor_poll_interval == 5
+        assert stored["embedded_server"].nudger_poll_interval == 1
         assert stored["embedded_server"].advertised_ip == "192.168.178.96"
-        assert stored["coordinator"].update_interval == timedelta(seconds=17)
+        assert stored["coordinator"].update_interval == timedelta(seconds=5)
         assert entry.update_listener is init_mod._async_options_updated
 
     def test_docker_setup_warns_when_advertised_ip_is_auto_detected(
@@ -188,8 +204,8 @@ class TestEmbeddedModeSetup:
 
         _run(init_mod.async_setup_entry(hass, entry))
 
-        assert "auto-detected advertised IP 192.168.1.100" in caplog.text
-        assert "host LAN address" in caplog.text
+        assert "advertised_ip_auto_detected_in_docker" in caplog.text
+        assert "192.168.1.100" in caplog.text
 
     def test_options_update_reloads_entry(self):
         hass = _make_hass()
@@ -309,15 +325,16 @@ class TestCoordinatorFailureSurfacing:
         server = _FakeEmbeddedServer("dsn", "ip", "key")
         caplog.set_level("INFO", logger="custom_components.cremalink_ha.coordinator")
         coordinator = CremalinkCoordinator(
-            hass, device, embedded_server=server, local_poll_interval=5
+            hass, device, embedded_server=server, monitor_poll_interval=5
         )
 
         _run(coordinator._async_update_data())
 
-        assert "decoded_local_monitor" in caplog.text
-        assert "base64-monitor-frame" in caplog.text
-        assert '"status": 2' in caplog.text
-        assert '"progress": 45' in caplog.text
+        assert len(server.telemetry_events) == 1
+        event, details = server.telemetry_events[0]
+        assert event == "decoded_local_monitor"
+        assert details["raw_b64"] == "base64-monitor-frame"
+        assert details["parsed"] == {"status": 2, "progress": 45}
 
 
 class TestBoundedStop:

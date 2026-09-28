@@ -13,13 +13,8 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry, OptionsFlow
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.selector import (
-    NumberSelector,
-    NumberSelectorConfig,
-    NumberSelectorMode,
-)
 
-from cremalink import Client
+from cremalink import Client, log_event
 
 from .const import *
 
@@ -111,7 +106,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     os.makedirs(token_dir, exist_ok=True)
                     temp_file = os.path.join(token_dir, "temp_token.json")
                     token.save(temp_file)
-                    client = Client(temp_file)
+                    client = Client(temp_file, logger=_LOGGER)
                     raw_devices = client.get_devices()
                     coffee_devices = client.list_account_devices()
                     return temp_file, raw_devices, coffee_devices
@@ -123,7 +118,12 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         coffee_devices,
                     ) = await self.hass.async_add_executor_job(_login_and_discover)
                 except Exception as e:
-                    _LOGGER.error("Cloud login failed: %s", e)
+                    log_event(
+                        _LOGGER,
+                        "cloud_login_failed",
+                        {"error_type": type(e).__name__},
+                        level=logging.ERROR,
+                    )
                     errors["base"] = "auth_failed"
                 else:
                     self._cloud_token_file = temp_file
@@ -173,7 +173,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._cloud_selected_device = device
 
         def _detect():
-            client = Client(self._cloud_token_file)
+            client = Client(self._cloud_token_file, logger=_LOGGER)
             serial = client.get_serial_number(device["dsn"])
             return detect_model_id(
                 serial,
@@ -224,7 +224,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_name = device.get("product_name") or dsn
 
         def _fetch_lan():
-            client = Client(self._cloud_token_file)
+            client = Client(self._cloud_token_file, logger=_LOGGER)
             return client.get_lan_config(dsn)
 
         map_data = await self.hass.async_add_executor_job(
@@ -411,7 +411,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     with open(temp_file, "w") as f:
                         json.dump({"refresh_token": refresh_token}, f)
 
-                    client = Client(temp_file)
+                    client = Client(temp_file, logger=_LOGGER)
                     return client.get_devices()
 
                 self._discovered_devices = await self.hass.async_add_executor_job(
@@ -425,7 +425,12 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return await self.async_step_cloud_device()
 
             except Exception as e:
-                _LOGGER.error("Authentication failed: %s", e)
+                log_event(
+                    _LOGGER,
+                    "cloud_authentication_failed",
+                    {"error_type": type(e).__name__},
+                    level=logging.ERROR,
+                )
                 errors["base"] = "auth_failed"
                 # Clean up if failed
                 if os.path.exists(temp_file):
@@ -544,15 +549,15 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Create the local polling options flow."""
+        """Create the local advertised-IP options flow."""
         return CremalinkOptionsFlow()
 
 
 class CremalinkOptionsFlow(OptionsFlow):
-    """Configure local polling and advertised IP for a Cremalink entry."""
+    """Configure the advertised IP for a local Cremalink entry."""
 
     async def async_step_init(self, user_input=None):
-        """Show and save local polling and advertised-IP settings."""
+        """Show and save the optional advertised-IP override."""
         if (
             self.config_entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_LOCAL)
             != CONNECTION_LOCAL
@@ -561,16 +566,6 @@ class CremalinkOptionsFlow(OptionsFlow):
 
         errors = {}
         if user_input is not None:
-            interval = user_input.get(CONF_MONITOR_POLL_INTERVAL)
-            if (
-                isinstance(interval, bool)
-                or not isinstance(interval, (int, float))
-                or interval < MIN_MONITOR_POLL_INTERVAL
-                or interval > MAX_MONITOR_POLL_INTERVAL
-                or not float(interval).is_integer()
-            ):
-                errors["base"] = "invalid_monitor_poll_interval"
-
             raw_advertised_ip = user_input.get(CONF_ADVERTISED_IP)
             try:
                 advertised_ip = _normalize_advertised_ip(raw_advertised_ip)
@@ -579,7 +574,7 @@ class CremalinkOptionsFlow(OptionsFlow):
                 errors["base"] = "invalid_advertised_ip"
 
             if not errors:
-                options = {CONF_MONITOR_POLL_INTERVAL: int(interval)}
+                options = {}
                 if CONF_ADVERTISED_IP in user_input:
                     options[CONF_ADVERTISED_IP] = advertised_ip
                 elif CONF_ADVERTISED_IP in self.config_entry.options:
@@ -595,27 +590,17 @@ class CremalinkOptionsFlow(OptionsFlow):
                     data=options,
                 )
 
-        current_interval = self.config_entry.options.get(
-            CONF_MONITOR_POLL_INTERVAL, DEFAULT_MONITOR_POLL_INTERVAL
+        current_advertised_ip = (
+            self.config_entry.options.get(
+                CONF_ADVERTISED_IP,
+                self.config_entry.data.get(CONF_ADVERTISED_IP, ""),
+            )
+            or ""
         )
-        current_advertised_ip = self.config_entry.options.get(
-            CONF_ADVERTISED_IP,
-            self.config_entry.data.get(CONF_ADVERTISED_IP, ""),
-        ) or ""
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_MONITOR_POLL_INTERVAL, default=current_interval
-                    ): NumberSelector(
-                        NumberSelectorConfig(
-                            min=MIN_MONITOR_POLL_INTERVAL,
-                            max=MAX_MONITOR_POLL_INTERVAL,
-                            step=1,
-                            mode=NumberSelectorMode.BOX,
-                        )
-                    ),
                     vol.Optional(
                         CONF_ADVERTISED_IP, default=current_advertised_ip
                     ): str,

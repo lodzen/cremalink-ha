@@ -37,6 +37,17 @@ REDACT_KEYS: set[str] = {
     "sign",
     "time_1",
     "time_2",
+    "api_key",
+    "authorization",
+    "cookie",
+    "credential",
+    "device_key",
+    "encryption_key",
+    "private_key",
+    "secret",
+    "session_key",
+    "session_token",
+    "token",
 }
 MAX_DIAGNOSTIC_EVENTS = 50
 
@@ -68,6 +79,8 @@ async def async_get_config_entry_diagnostics(
             "bound_port": embedded_server.bound_port,
             "advertised_ip": "**REDACTED**" if embedded_server.advertised_ip else None,
             "monitor_poll_interval": embedded_server.monitor_poll_interval,
+            "nudger_poll_interval": embedded_server.nudger_poll_interval,
+            "rekey_interval_seconds": embedded_server.rekey_interval_seconds,
             "recent_events": [
                 _redact_event(event)
                 for event in embedded_server.get_recent_events()[

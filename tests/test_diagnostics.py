@@ -55,6 +55,8 @@ def test_diagnostics_redacts_embedded_server_ip_and_surfaces_port():
     embedded_server.bound_port = 10281
     embedded_server.advertised_ip = "192.168.1.50"
     embedded_server.monitor_poll_interval = 12
+    embedded_server.nudger_poll_interval = 1
+    embedded_server.rekey_interval_seconds = 60
     embedded_server.get_recent_events.return_value = [
         {
             "event": "monitor_datapoint",
@@ -88,6 +90,8 @@ def test_diagnostics_redacts_embedded_server_ip_and_surfaces_port():
         "bound_port": 10281,
         "advertised_ip": "**REDACTED**",
         "monitor_poll_interval": 12,
+        "nudger_poll_interval": 1,
+        "rekey_interval_seconds": 60,
         "recent_events": [
             {
                 "event": "monitor_datapoint",

@@ -1,6 +1,5 @@
 """Data update coordinator for the Cremalink integration."""
 
-import json
 import logging
 from datetime import timedelta
 
@@ -24,7 +23,7 @@ class CremalinkCoordinator(DataUpdateCoordinator):
         hass: HomeAssistant,
         device: Device,
         embedded_server=None,
-        local_poll_interval: float | None = None,
+        monitor_poll_interval: float | None = None,
     ):
         """Initialize the coordinator.
 
@@ -40,14 +39,14 @@ class CremalinkCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name=DOMAIN,
             update_interval=(
-                timedelta(seconds=local_poll_interval)
-                if local_poll_interval is not None
+                timedelta(seconds=monitor_poll_interval)
+                if monitor_poll_interval is not None
                 else SCAN_INTERVAL_FAST
             ),
         )
         self.device = device
         self.embedded_server = embedded_server
-        self._adaptive_interval = local_poll_interval is None
+        self._adaptive_interval = monitor_poll_interval is None
 
     async def _async_update_data(self):
         """Fetch data from the device.
@@ -77,19 +76,15 @@ class CremalinkCoordinator(DataUpdateCoordinator):
                 and getattr(data, "raw_b64", None)
             ):
                 snapshot = getattr(data, "snapshot", None)
-                _LOGGER.info(
-                    "decoded_local_monitor %s",
-                    json.dumps(
-                        {
-                            "received_at": getattr(data, "received_at", None),
-                            "raw_b64": data.raw_b64,
-                            "parsed": data.parsed,
-                            "warnings": getattr(snapshot, "warnings", []),
-                            "errors": getattr(snapshot, "errors", []),
-                        },
-                        sort_keys=True,
-                        default=str,
-                    ),
+                self.embedded_server.log_telemetry(
+                    "decoded_local_monitor",
+                    {
+                        "received_at": getattr(data, "received_at", None),
+                        "raw_b64": data.raw_b64,
+                        "parsed": data.parsed,
+                        "warnings": getattr(snapshot, "warnings", []),
+                        "errors": getattr(snapshot, "errors", []),
+                    },
                 )
 
             if (

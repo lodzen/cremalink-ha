@@ -88,9 +88,8 @@
     "step": {
       "init": {
         "title": "Local connection settings",
-        "description": "Set the polling interval and the IP address the coffee machine should use to reach this Home Assistant instance.",
+        "description": "Set the IP address the coffee machine should use to reach this Home Assistant instance.",
         "data": {
-          "monitor_poll_interval": "Polling interval (seconds)",
           "advertised_ip": "Advertised IP (optional)"
         },
         "data_description": {
@@ -99,7 +98,6 @@
       }
     },
     "error": {
-      "invalid_monitor_poll_interval": "Enter a whole number between 1 and 60 seconds.",
       "invalid_advertised_ip": "Enter a valid IPv4 address."
     },
     "abort": {
