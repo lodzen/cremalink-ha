@@ -70,8 +70,13 @@ class CremalinkButton(CoordinatorEntity, ButtonEntity):
         data = self.coordinator.data
         if not super().available or not data:
             return False
+        status = data.status_name
+        if status is None:
+            # No monitor reading yet (startup): do not claim availability
+            # that the first real reading may withdraw seconds later.
+            return False
         blocked = STANDBY_STATUSES if self._title == "Stop" else NOT_READY_STATUSES
-        return data.status_name not in blocked
+        return status not in blocked
 
     async def async_press(self):
         """Handle the button press."""

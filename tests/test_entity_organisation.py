@@ -95,6 +95,13 @@ class TestBrewButtons:
         coordinator.data = FakeMonitorData(status_name="ready", is_busy=False)
         assert espresso.available is True
 
+    def test_unavailable_until_the_first_status_is_known(self):
+        # Startup: an empty first reading must not briefly report "available"
+        # (that would be a state change Home Assistant logs as a button press).
+        _, _, entities = _setup(button_mod, FakeMonitorData(status_name=None))
+        for entity in entities:
+            assert entity.available is False
+
     def test_availability_ignores_the_action_byte(self):
         _, coordinator, entities = _setup(
             button_mod, FakeMonitorData(status_name="ready", is_busy=False)
@@ -142,21 +149,43 @@ class TestEntityCategories:
         for entity in entities:
             assert entity.entity_category == EntityCategory.CONFIG
 
-    def test_monitor_sensors_diagnostic_statistics_not(self):
+    def test_monitor_sensor_categories(self):
         _, _, entities = _setup(sensor_mod, FakeMonitorData(status_name="ready"))
-        for uid in ("status_name", "progress_percent", "accessory_name", "action_code"):
-            assert _by_uid(entities, f"entry1_{uid}").entity_category == (
-                EntityCategory.DIAGNOSTIC
-            )
+        for uid in ("status_name", "progress_percent", "accessory_name"):
+            assert _by_uid(entities, f"entry1_{uid}").entity_category is None
+        assert _by_uid(entities, "entry1_action_code").entity_category == (
+            EntityCategory.DIAGNOSTIC
+        )
         stats = [e for e in entities if "_stat_" in e.unique_id]
         assert stats
         assert all(e.entity_category is None for e in stats)
 
-    def test_binary_sensors_all_diagnostic(self):
+    def test_binary_sensor_categories(self):
         _, _, entities = _setup(bs_mod, FakeMonitorData(status_name="ready"))
-        assert entities
+        primary = {
+            "is_busy",
+            "is_watertank_open",
+            "is_watertank_empty",
+            "is_waste_container_full",
+            "is_waste_container_missing",
+        }
         for entity in entities:
-            assert entity.entity_category == EntityCategory.DIAGNOSTIC
+            key = entity.unique_id.removeprefix("entry1_")
+            assert entity.entity_category is (
+                None if key in primary else EntityCategory.DIAGNOSTIC
+            )
+
+    def test_busy_is_off_in_standby_despite_a_latched_action_byte(self):
+        # In standby the monitor's action byte stays latched from the last
+        # drink; Busy must still read off.
+        _, _, entities = _setup(
+            bs_mod, FakeMonitorData(status_name="in_standby", is_busy=True)
+        )
+        assert _by_uid(entities, "entry1_is_busy").is_on is False
+        _, _, entities = _setup(
+            bs_mod, FakeMonitorData(status_name="ready", is_busy=True)
+        )
+        assert _by_uid(entities, "entry1_is_busy").is_on is True
 
 
 class TestBitSensors:

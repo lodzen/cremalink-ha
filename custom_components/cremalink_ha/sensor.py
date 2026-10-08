@@ -8,7 +8,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, CONNECTION_CLOUD, DOMAIN, STANDBY_STATUSES
 
-#: Monitor-value sensors (diagnostic): (key, name, icon, unit, enum_profile_key).
+#: Monitor-value sensors: (key, name, icon, unit, enum_profile_key).
 #: Enum-keyed sensors expose translated states (T043/FR-033).
 MONITOR_SENSORS = [
     ("status_name", "Status", "mdi:coffee-maker", None, "status"),
@@ -16,6 +16,10 @@ MONITOR_SENSORS = [
     ("accessory_name", "Accessory", "mdi:cup", None, "accessory"),
     ("action_code", "Action Code", "mdi:state-machine", None, None),
 ]
+
+#: MONITOR_SENSORS keys in the normal entity section; Action Code and the
+#: statistics sensors are diagnostic / normal respectively.
+_PRIMARY_SENSOR_KEYS = {"status_name", "progress_percent", "accessory_name"}
 
 #: Fields suppressed while the machine is in a standby-like status — the
 #: machine stops evaluating them, so entities retain their last live value
@@ -116,9 +120,7 @@ class _CremalinkEntityBase(CoordinatorEntity):
 
 
 class CremalinkSensor(_CremalinkEntityBase, SensorEntity):
-    """Representation of a Cremalink monitor sensor (diagnostic)."""
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    """Representation of a Cremalink monitor sensor."""
 
     def __init__(self, coordinator, entry, key, name, icon, unit, options=None):
         """Initialize the sensor.
@@ -138,6 +140,9 @@ class CremalinkSensor(_CremalinkEntityBase, SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_icon = icon
         self._attr_native_unit_of_measurement = unit
+        self._attr_entity_category = (
+            None if key in _PRIMARY_SENSOR_KEYS else EntityCategory.DIAGNOSTIC
+        )
         self._standby_cache = None
         if options:
             self._attr_device_class = SensorDeviceClass.ENUM

@@ -40,6 +40,16 @@ BINARY_SENSORS = [
     ),
 ]
 
+#: BINARY_SENSORS keys that stay in the normal entity section; anything
+#: else (Idle, every switch/alarm bit sensor) is diagnostic.
+_PRIMARY_BINARY_KEYS = {
+    "is_busy",
+    "is_watertank_open",
+    "is_watertank_empty",
+    "is_waste_container_full",
+    "is_waste_container_missing",
+}
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the binary sensor platform.
@@ -82,9 +92,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class CremalinkBinarySensor(CoordinatorEntity, BinarySensorEntity):
-    """Representation of a Cremalink binary sensor (diagnostic)."""
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    """Representation of a Cremalink binary sensor."""
 
     def __init__(self, coordinator, entry, key, name, icon, dev_class):
         """Initialize the binary sensor.
@@ -103,6 +111,9 @@ class CremalinkBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_icon = icon
         self._attr_device_class = dev_class
+        self._attr_entity_category = (
+            None if key in _PRIMARY_BINARY_KEYS else EntityCategory.DIAGNOSTIC
+        )
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
@@ -132,6 +143,10 @@ class CremalinkBinarySensor(CoordinatorEntity, BinarySensorEntity):
         """
         status = getattr(self.coordinator.data, "status_name", None)
         if status in STANDBY_STATUSES:
+            if self._key == "is_busy":
+                # The action byte stays latched from the last drink in
+                # standby — the machine is not actually busy.
+                return False
             return self._standby_cache
         value = self._read()
         if value is not None:
