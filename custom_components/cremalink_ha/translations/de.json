@@ -1,0 +1,14 @@
+{
+  "entity": {
+    "select": {
+      "setting_water_hardness": {
+        "state": {
+          "level_1": "Stufe 1",
+          "level_2": "Stufe 2",
+          "level_3": "Stufe 3",
+          "level_4": "Stufe 4"
+        }
+      }
+    }
+  }
+}
