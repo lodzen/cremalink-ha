@@ -39,3 +39,10 @@ CONF_ADVERTISED_IP = "advertised_ip"
 DEFAULT_LOCAL_SERVER_PORT = 10280
 LOCAL_SERVER_PORT_FALLBACK_RANGE = 50
 REPAIR_RECONFIGURE_REQUIRED = "reconfigure_required"
+
+#: Statuses during which the machine stops evaluating alarm/switch/accessory
+#: bytes — latched values must not surface as live readings (T044/FR-034).
+STANDBY_STATUSES = {"in_standby", "going_to_sleep", "sleeping", "deep_sleep"}
+
+#: Statuses in which the machine cannot start a drink (asleep or still waking).
+NOT_READY_STATUSES = STANDBY_STATUSES | {"waking_up"}

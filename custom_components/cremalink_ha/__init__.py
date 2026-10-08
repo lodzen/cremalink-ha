@@ -24,7 +24,13 @@ from .coordinator import CremalinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.SWITCH, Platform.BUTTON, Platform.SENSOR, Platform.BINARY_SENSOR]
+PLATFORMS = [
+    Platform.SWITCH,
+    Platform.BUTTON,
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SELECT,
+]
 
 #: Belt-and-suspenders bound on top of embedded.py's own site shutdown_timeout --
 #: a stuck teardown must never block a reload/unload/removal indefinitely
@@ -105,7 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             map_path = await hass.async_add_executor_job(device_map, map_selection)
 
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log_event(
             _LOGGER,
             "device_map_resolve_failed",

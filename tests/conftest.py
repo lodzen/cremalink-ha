@@ -137,10 +137,205 @@ class _DataUpdateCoordinatorBase:
         self.data = await self._async_update_data()
         self.last_update_success = True
 
+    async def async_request_refresh(self):
+        return None
+
 
 _uc_mod = sys.modules["homeassistant.helpers.update_coordinator"]
 _uc_mod.DataUpdateCoordinator = _DataUpdateCoordinatorBase
 _uc_mod.UpdateFailed = _UpdateFailed
+
+
+class _CoordinatorEntityBase:
+    """Stand-in for HA's update_coordinator.CoordinatorEntity."""
+
+    def __init__(self, coordinator):
+        self.coordinator = coordinator
+        self.hass = getattr(coordinator, "hass", None)
+
+    @property
+    def available(self):
+        return getattr(self.coordinator, "last_update_success", True)
+
+    def async_write_ha_state(self):
+        return None
+
+    def _handle_coordinator_update(self):
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self):
+        return None
+
+
+_uc_mod.CoordinatorEntity = _CoordinatorEntityBase
+
+
+class _RestoreEntity:
+    """Stand-in for HA's restore_state.RestoreEntity (tests set ``_last_state``)."""
+
+    _last_state = None
+
+    async def async_get_last_state(self):
+        return self._last_state
+
+
+class _RestoreStateData:
+    """Stand-in for HA's RestoreStateData; counts forced dumps."""
+
+    dumps = 0
+
+    @classmethod
+    async def async_save_persistent_states(cls, hass):
+        cls.dumps += 1
+
+
+_restore_mod = type(sys)("homeassistant.helpers.restore_state")
+_restore_mod.RestoreEntity = _RestoreEntity
+_restore_mod.RestoreStateData = _RestoreStateData
+sys.modules["homeassistant.helpers.restore_state"] = _restore_mod
+
+
+class _EntityBase:
+    """Minimal stand-in for HA's platform entity bases."""
+
+    _attr_name = None
+    _attr_unique_id = None
+    _attr_icon = None
+    _attr_device_info = None
+    _attr_available = True
+    _attr_entity_category = None
+    _attr_translation_key = None
+    _attr_entity_registry_enabled_default = True
+
+    @property
+    def entity_category(self):
+        return self._attr_entity_category
+
+    @property
+    def translation_key(self):
+        return self._attr_translation_key
+
+    @property
+    def entity_registry_enabled_default(self):
+        return self._attr_entity_registry_enabled_default
+
+    @property
+    def name(self):
+        return self._attr_name
+
+    @property
+    def unique_id(self):
+        return self._attr_unique_id
+
+    @property
+    def device_info(self):
+        return self._attr_device_info
+
+    @property
+    def available(self):
+        return self._attr_available
+
+    def async_write_ha_state(self):
+        return None
+
+
+for _platform_mod, _entity_attrs in (
+    (
+        "homeassistant.components.sensor",
+        {"SensorEntity": type("SensorEntity", (_EntityBase,), {})},
+    ),
+    (
+        "homeassistant.components.binary_sensor",
+        {"BinarySensorEntity": type("BinarySensorEntity", (_EntityBase,), {})},
+    ),
+    (
+        "homeassistant.components.select",
+        {"SelectEntity": type("SelectEntity", (_EntityBase,), {})},
+    ),
+    (
+        "homeassistant.components.button",
+        {"ButtonEntity": type("ButtonEntity", (_EntityBase,), {})},
+    ),
+    (
+        "homeassistant.components.switch",
+        {"SwitchEntity": type("SwitchEntity", (_EntityBase,), {})},
+    ),
+):
+    if _platform_mod not in sys.modules:
+        sys.modules[_platform_mod] = MagicMock()
+    for _name, _cls in _entity_attrs.items():
+        setattr(sys.modules[_platform_mod], _name, _cls)
+
+
+class _SensorDeviceClass:
+    """Stand-in for HA's sensor.SensorDeviceClass enum."""
+
+    ENUM = "enum"
+
+
+sys.modules["homeassistant.components.sensor"].SensorDeviceClass = _SensorDeviceClass
+
+
+class _BinarySensorDeviceClass:
+    """Stand-in for HA's binary_sensor.BinarySensorDeviceClass enum."""
+
+    RUNNING = "running"
+    DOOR = "door"
+    PROBLEM = "problem"
+
+
+sys.modules[
+    "homeassistant.components.binary_sensor"
+].BinarySensorDeviceClass = _BinarySensorDeviceClass
+
+
+if "homeassistant.helpers.entity" not in sys.modules:
+    sys.modules["homeassistant.helpers.entity"] = MagicMock()
+
+
+class _DeviceInfo(dict):
+    """Stand-in for HA's helpers.entity.DeviceInfo (a TypedDict)."""
+
+
+sys.modules["homeassistant.helpers.entity"].DeviceInfo = _DeviceInfo
+sys.modules["homeassistant.helpers"].entity = sys.modules[
+    "homeassistant.helpers.entity"
+]
+
+_const_mod = sys.modules["homeassistant.const"]
+_const_mod.PERCENTAGE = "%"
+
+
+class _UnitOfVolume:
+    """Stand-in for HA's const.UnitOfVolume enum."""
+
+    LITERS = "L"
+
+
+_const_mod.UnitOfVolume = _UnitOfVolume
+
+
+class _EntityCategory:
+    """Stand-in for HA's const.EntityCategory enum."""
+
+    CONFIG = "config"
+    DIAGNOSTIC = "diagnostic"
+
+
+_const_mod.EntityCategory = _EntityCategory
+
+
+class _Platform:
+    """Stand-in for HA's const.Platform enum."""
+
+    SWITCH = "switch"
+    BUTTON = "button"
+    SENSOR = "sensor"
+    BINARY_SENSOR = "binary_sensor"
+    SELECT = "select"
+
+
+_const_mod.Platform = _Platform
 
 
 class _IssueSeverity:

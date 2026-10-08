@@ -109,5 +109,47 @@
       "title": "{device_name} needs to be reconfigured",
       "description": "The Cremalink Server add-on is no longer required for local mode. {device_name} ({dsn}) is still using it — reconfigure this device to switch to the built-in local server, then you can uninstall the add-on."
     }
+  },
+  "entity": {
+    "select": {
+      "setting_water_hardness": {
+        "state": {
+          "level_1": "Level 1",
+          "level_2": "Level 2",
+          "level_3": "Level 3",
+          "level_4": "Level 4"
+        }
+      }
+    },
+    "sensor": {
+      "cremalink_status_name": {
+        "state": {
+          "in_standby": "Standby",
+          "waking_up": "Waking up",
+          "going_to_sleep": "Going to sleep",
+          "descaling": "Descaling",
+          "preparing_steam": "Preparing steam",
+          "ready": "Ready",
+          "rinsing": "Rinsing",
+          "preparing_milk": "Preparing milk",
+          "dispensing_hot_water": "Dispensing hot water",
+          "cleaning_milk": "Cleaning milk circuit",
+          "preparing_chocolate": "Preparing chocolate",
+          "preparing_milk_alt": "Preparing milk",
+          "unknown_29": "Busy"
+        }
+      },
+      "cremalink_accessory_name": {
+        "state": {
+          "none": "None",
+          "hot_water_spout": "Hot water spout",
+          "latte_crema_hot": "LatteCrema carafe (hot)",
+          "chocolate": "Chocolate container",
+          "latte_crema_hot_clean": "LatteCrema carafe (clean position)",
+          "latte_crema_cool": "LatteCrema carafe (cool)",
+          "latte_crema_cool_clean": "LatteCrema carafe (cool, clean position)"
+        }
+      }
+    }
   }
 }

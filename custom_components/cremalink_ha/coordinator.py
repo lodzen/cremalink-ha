@@ -1,6 +1,7 @@
 """Data update coordinator for the Cremalink integration."""
 
 import logging
+import time
 from datetime import timedelta
 
 from cremalink.domain.device import Device
@@ -13,6 +14,14 @@ _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL_FAST = timedelta(seconds=1)
 SCAN_INTERVAL_SLOW = timedelta(seconds=30)
+
+#: Slow-lane statistics fetch cadence (minutes-scale per spec R10 — the
+#: 0xA2 paging session and cloud property snapshots do not need fast polls).
+STATISTICS_INTERVAL = timedelta(minutes=5)
+
+#: Consecutive failed refreshes tolerated before entities go unavailable
+#: (FR-035 — a single transient LAN/transport failure must not flap state).
+DEFAULT_FAILURE_THRESHOLD = 3
 
 
 class CremalinkCoordinator(DataUpdateCoordinator):
@@ -47,6 +56,44 @@ class CremalinkCoordinator(DataUpdateCoordinator):
         self.device = device
         self.embedded_server = embedded_server
         self._adaptive_interval = monitor_poll_interval is None
+        # Slow-lane statistics state (T025) — fetched at STATISTICS_INTERVAL
+        # cadence, not on every monitor poll.
+        self.statistics = None
+        self._statistics_fetched_at: float = 0.0
+        # None = unknown yet, True/False once the first fetch resolved.
+        self.statistics_supported: bool | None = None
+        # Read-failure retention (T045/FR-035).
+        self.consecutive_failures = 0
+        self.failure_threshold = DEFAULT_FAILURE_THRESHOLD
+
+    async def _async_fetch_statistics(self) -> None:
+        """Refresh the slow-lane statistics report when due.
+
+        Paced per R10: at most one fetch per STATISTICS_INTERVAL. A
+        transport that cannot serve the source (`NotImplementedError`)
+        marks the feature unsupported permanently — no retry storms.
+        Other errors keep the previous report.
+        """
+        now = time.monotonic()
+        if now - self._statistics_fetched_at < STATISTICS_INTERVAL.total_seconds():
+            return
+        self._statistics_fetched_at = now
+        if self.statistics_supported is False:
+            return
+        get_statistics = getattr(self.device, "get_statistics", None)
+        if get_statistics is None:
+            # Devices/transports without the statistics API are treated
+            # as unsupported — probe once, never retry.
+            self.statistics_supported = False
+            return
+        try:
+            self.statistics = await self.hass.async_add_executor_job(get_statistics)
+            self.statistics_supported = True
+        except NotImplementedError:
+            self.statistics_supported = False
+        except (OSError, ValueError, RuntimeError) as err:
+            # keep the previous report on transient fetch failures
+            _LOGGER.debug("Statistics fetch failed: %s", err)
 
     async def _async_update_data(self):
         """Fetch data from the device.
@@ -99,6 +146,9 @@ class CremalinkCoordinator(DataUpdateCoordinator):
                 elif status is not None:
                     self.update_interval = SCAN_INTERVAL_FAST
 
+            self.consecutive_failures = 0
+            await self._async_fetch_statistics()
             return data
         except Exception as err:
+            self.consecutive_failures += 1
             raise UpdateFailed(f"Error communicating with device: {err}") from err

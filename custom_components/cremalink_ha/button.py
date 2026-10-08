@@ -1,8 +1,11 @@
 """Button platform for the Cremalink integration."""
+
 from homeassistant.components.button import ButtonEntity
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from .const import DOMAIN, CONF_CONNECTION_TYPE, CONNECTION_CLOUD
+
+from .const import CONF_CONNECTION_TYPE, DOMAIN, NOT_READY_STATUSES, STANDBY_STATUSES
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -43,8 +46,8 @@ class CremalinkButton(CoordinatorEntity, ButtonEntity):
         super().__init__(coordinator)
         self.device = device
         self._cmd = cmd
-        self._title = cmd.replace('_', ' ').title()
-        self._attr_name = f"{"Brew" if self._title not in ["Stop"] else ""} {self._title} {"brewing" if self._title in ["Stop"] else ""}"
+        self._title = cmd.replace("_", " ").title()
+        self._attr_name = f"{'Brew' if self._title not in ['Stop'] else ''} {self._title} {'brewing' if self._title in ['Stop'] else ''}"
         self._attr_unique_id = f"{entry.entry_id}_cmd_{cmd}"
         self._attr_icon = "mdi:coffee"
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
@@ -56,12 +59,28 @@ class CremalinkButton(CoordinatorEntity, ButtonEntity):
 
     @property
     def available(self):
-        """Return True if entity is available."""
-        if self._title in ["Stop"]:
-            return super().available and self.coordinator.data.is_busy
-        return super().available and not self.coordinator.data.is_busy
+        """Reachable and awake (drinks also need the machine fully woken up).
+
+        Availability follows only the machine status, never the monitor's
+        action byte: that byte flips while the machine goes to sleep or
+        brews, and every unavailable -> available flip of a button shows up
+        in Home Assistant as if it had been pressed. A busy machine is
+        rejected in :meth:`async_press` instead.
+        """
+        data = self.coordinator.data
+        if not super().available or not data:
+            return False
+        blocked = STANDBY_STATUSES if self._title == "Stop" else NOT_READY_STATUSES
+        return data.status_name not in blocked
 
     async def async_press(self):
         """Handle the button press."""
+        data = self.coordinator.data
+        # Stop is always sent (harmless when idle); drinks need a ready machine.
+        if self._title != "Stop" and data:
+            if data.status_name in NOT_READY_STATUSES:
+                raise HomeAssistantError("The machine is not ready; turn it on first.")
+            if data.is_busy:
+                raise HomeAssistantError("The machine is busy; wait until it is ready.")
         await self.hass.async_add_executor_job(self.device.do, self._cmd)
         await self.coordinator.async_request_refresh()

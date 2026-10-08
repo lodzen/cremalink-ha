@@ -7,6 +7,7 @@ the LAN key. Modeled directly on ``delonghi_coffee``'s ``diagnostics.py``.
 
 from __future__ import annotations
 
+from base64 import b64decode
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -51,6 +52,42 @@ REDACT_KEYS: set[str] = {
 }
 MAX_DIAGNOSTIC_EVENTS = 50
 
+#: Blob families carrying user-entered names (profile names ``a4f0``,
+#: recipe names ``aaf0``, bean-system ``baf0``). Their contents are
+#: elided from diagnostics; the frame header + slot indices stay.
+USER_NAME_BLOB_FAMILIES = {b"\xa4\xf0", b"\xaa\xf0", b"\xba\xf0"}
+
+
+def _redact_blob_value(value: Any) -> Any:
+    """Elide user-name blob contents in a single value.
+
+    A base64 string that decodes to a ``0xD0`` frame in a name-bearing
+    family is replaced by ``<family>/<slots>/**REDACTED**`` — the frame
+    header and profile/recipe slot indices remain for debugging.
+    """
+    if not isinstance(value, str):
+        return value
+    try:
+        raw = b64decode("".join(value.split()))
+    except (ValueError, TypeError):
+        return value
+    if len(raw) < 6 or raw[0] != 0xD0 or raw[2:4] not in USER_NAME_BLOB_FAMILIES:
+        return value
+    family = raw[2:4].hex()
+    slots = raw[4:6].hex()
+    return f"{family}:{slots}:**REDACTED**"
+
+
+def _redact_blobs(node: Any, depth: int = 0) -> Any:
+    """Recursively redact user-name blobs in a diagnostics structure."""
+    if depth > 6:
+        return node
+    if isinstance(node, dict):
+        return {k: _redact_blobs(v, depth + 1) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_redact_blobs(v, depth + 1) for v in node]
+    return _redact_blob_value(node)
+
 
 def _redact_event(event: dict[str, Any]) -> dict[str, Any]:
     """Redact event fields and detail keys before diagnostics export."""
@@ -58,7 +95,7 @@ def _redact_event(event: dict[str, Any]) -> dict[str, Any]:
     details = event.get("details")
     if isinstance(details, dict):
         redacted["details"] = async_redact_data(dict(details), REDACT_KEYS)
-    return redacted
+    return _redact_blobs(redacted)
 
 
 async def async_get_config_entry_diagnostics(

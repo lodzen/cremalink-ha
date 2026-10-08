@@ -57,6 +57,29 @@ This integration connects your Home Assistant instance to the **Cremalink** ecos
     the first screen to fall back to the previous manual flow: picking a device map
     and entering the DSN/LAN key/IP (local) or a refresh token (cloud) by hand.
 
+### Entities
+
+Beyond the monitor sensors, binary sensors, and the power switch, the
+integration exposes:
+
+- **Statistics sensors** (local connections only): native `0xA2` usage
+  counters — total beverages, per-drink counts, descales, milk cleans,
+  filter changes, and total water (litres). Fetched on a slow ~5-minute
+  lane; cloud entries on `native` maps get none (the Ayla cache is
+  stale there). `cloud_counters` maps (e.g. Eletta-family machines
+  without LAN support) expose their counters on cloud entries instead.
+- **Profile select**: lists the occupied machine profiles by name;
+  changing it sends a session-gated `0xA9` write — the entity only
+  shows machine-confirmed selections.
+- **Settings selects**: auto-off time and water hardness, writable via
+  session-gated `0x90` commands with read-back confirmation.
+
+> **A note on writes:** machine writes are announced through a short
+> (~300 s) session, which the integration manages for you. A write can
+> take a second or two to confirm and only shows up in the entity once
+> the machine acknowledged it — a failed write leaves the previous
+> option in place.
+
 ---
 
 ## ⚙️ Upgrading from the add-on
