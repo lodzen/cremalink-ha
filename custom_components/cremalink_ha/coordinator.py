@@ -59,7 +59,7 @@ class CremalinkCoordinator(DataUpdateCoordinator):
         # Slow-lane statistics state (T025) — fetched at STATISTICS_INTERVAL
         # cadence, not on every monitor poll.
         self.statistics = None
-        self._statistics_fetched_at: float = 0.0
+        self._statistics_fetched_at: float | None = None
         # None = unknown yet, True/False once the first fetch resolved.
         self.statistics_supported: bool | None = None
         # Read-failure retention (T045/FR-035).
@@ -75,7 +75,10 @@ class CremalinkCoordinator(DataUpdateCoordinator):
         Other errors keep the previous report.
         """
         now = time.monotonic()
-        if now - self._statistics_fetched_at < STATISTICS_INTERVAL.total_seconds():
+        if (
+            self._statistics_fetched_at is not None
+            and now - self._statistics_fetched_at < STATISTICS_INTERVAL.total_seconds()
+        ):
             return
         self._statistics_fetched_at = now
         if self.statistics_supported is False:
