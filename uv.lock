@@ -695,13 +695,13 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cremalink-lodzen", specifier = "==2.0.0.dev1" },
+    { name = "cremalink-lodzen", specifier = "==2.0.0.dev3" },
     { name = "homeassistant", specifier = ">=2026.2.3" },
 ]
 
 [[package]]
 name = "cremalink-lodzen"
-version = "2.0.0.dev1"
+version = "2.0.0.dev3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -710,9 +710,9 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d8/e1/38f2898b88694572db8624d56b362586169037662a7be337783f853dc3eb/cremalink_lodzen-2.0.0.dev1.tar.gz", hash = "sha256:a1873ae8b9318f3e55dd887da2fb2c23224d1018665590b57aaf48227a7997a8", size = 628804, upload-time = "2026-10-08T11:50:59.878Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/b8/ad82d1f544a8998e81a9d120935a20a5123520d24ba5f65a3e5b35ade7c6/cremalink_lodzen-2.0.0.dev3.tar.gz", hash = "sha256:0c5a142b420dbb7b21179133942985e062de3789d2ae4f1a8ee75fb38d547052", size = 631330, upload-time = "2026-10-12T11:49:22.684Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/07/919b4d37c262338b70ab4a6fcafd79648cf34034954444ba91759cf0d68b/cremalink_lodzen-2.0.0.dev1-py3-none-any.whl", hash = "sha256:26cf85c68d772471ffe53d1d67052e80faaea7a7fb9788098e6c33ffba3c21ca", size = 129516, upload-time = "2026-10-08T11:50:58.292Z" },
+    { url = "https://files.pythonhosted.org/packages/64/58/ac0120969df1248ab83323f1a3bc5a2bdbd3cf8ad54c9ad3de453ed69d5e/cremalink_lodzen-2.0.0.dev3-py3-none-any.whl", hash = "sha256:2d5f9b94930f4e7ed4f261c947820dc1e3e2316a41726a37a9b71be38962b71f", size = 130792, upload-time = "2026-10-12T11:49:21.364Z" },
 ]
 
 [[package]]
