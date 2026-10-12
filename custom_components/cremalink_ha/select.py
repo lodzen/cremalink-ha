@@ -13,18 +13,20 @@ import logging
 from cremalink.ecam.settings import SETTING_OPTION_MAPS
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity, RestoreStateData
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES
+from .const import CONF_CONNECTION_TYPE, DOMAIN, NOT_READY_STATUSES, STANDBY_STATUSES
 
 _LOGGER = logging.getLogger(__name__)
 
-#: Setting select definitions: (setting key, suffix, display-name prefix).
+#: Setting select definitions: (setting key, suffix). The suffix is also the
+#: entity translation key (name and option labels).
 SETTING_SELECTS = [
-    ("auto_off", "setting_auto_off", "Auto-Off"),
-    ("water_hardness", "setting_water_hardness", "Water Hardness"),
+    ("auto_off", "setting_auto_off"),
+    ("water_hardness", "setting_water_hardness"),
 ]
 
 
@@ -37,13 +39,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entities = [CremalinkProfileSelect(coordinator, device, entry)]
 
     capabilities = getattr(device, "capabilities", {}) or {}
-    for key, suffix, name in SETTING_SELECTS:
+    for key, suffix in SETTING_SELECTS:
         setting = SETTING_OPTION_MAPS[key]
         if capabilities and not capabilities.get(setting.capability, True):
             continue
-        entities.append(
-            CremalinkSettingSelect(coordinator, device, entry, key, suffix, name)
-        )
+        entities.append(CremalinkSettingSelect(coordinator, device, entry, key, suffix))
 
     async_add_entities(entities)
 
@@ -54,6 +54,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class _BaseSelect(CoordinatorEntity, SelectEntity):
     _attr_entity_category = EntityCategory.CONFIG
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator, device, entry):
         super().__init__(coordinator)
@@ -103,7 +104,7 @@ class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
 
     def __init__(self, coordinator, device, entry):
         super().__init__(coordinator, device, entry)
-        self._attr_name = "Profile"
+        self._attr_translation_key = "profile"
         self._attr_unique_id = f"{entry.entry_id}_profile"
         self._attr_icon = "mdi:account"
         self._slots: dict[str, int] = {}  # option label -> profile index
@@ -185,11 +186,10 @@ class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
 class CremalinkSettingSelect(_BaseSelect):
     """Writable machine setting backed by a session-gated 0x90 write."""
 
-    def __init__(self, coordinator, device, entry, key, suffix, name):
+    def __init__(self, coordinator, device, entry, key, suffix):
         super().__init__(coordinator, device, entry)
         self._key = key
         self._setting = SETTING_OPTION_MAPS[key]
-        self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_{suffix}"
         self._attr_translation_key = suffix
         self._attr_icon = "mdi:cog"
@@ -223,9 +223,25 @@ class CremalinkSettingSelect(_BaseSelect):
         )
         if index is None:
             raise ValueError(f"unknown option {option!r} for {self._key}")
-        ok = await self.hass.async_add_executor_job(
-            self.device.set_setting, self._key, index
-        )
-        if ok:
-            self._current_option = option
-            self.async_write_ha_state()
+        data = self.coordinator.data
+        if data is not None and data.status_name in NOT_READY_STATUSES:
+            # Never wake the machine for a configuration change: warn and
+            # abort. (The library enforces the same against a fresh reading.)
+            message = (
+                f"The machine has to be switched on to change {self.name}; "
+                "it is in standby. Switch it on and try again."
+            )
+            _LOGGER.warning(message)
+            raise ServiceValidationError(message)
+        try:
+            ok = await self.hass.async_add_executor_job(
+                self.device.set_setting, self._key, index
+            )
+        except (OSError, TimeoutError, RuntimeError) as err:
+            raise HomeAssistantError(
+                f"The machine did not confirm the change of {self.name}: {err}"
+            ) from err
+        if not ok:
+            raise HomeAssistantError(f"The machine rejected the change of {self.name}.")
+        self._current_option = option
+        self.async_write_ha_state()

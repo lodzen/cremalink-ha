@@ -6,8 +6,21 @@ MagicMock, then replace the specific bases config_flow.py/diagnostics.py
 actually subclass or call with real, minimal stand-ins.
 """
 
+import json
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock
+
+#: English entity translations, used by the entity stub to resolve names the
+#: way Home Assistant does for ``has_entity_name`` entities.
+_EN_ENTITY_TRANSLATIONS = json.loads(
+    (
+        Path(__file__).resolve().parents[1]
+        / "custom_components"
+        / "cremalink_ha"
+        / "strings.json"
+    ).read_text(encoding="utf-8")
+)["entity"]
 
 _HA_MODULES = [
     "homeassistant",
@@ -110,6 +123,9 @@ _ha_mod.components = sys.modules["homeassistant.components"]
 _exc_mod = sys.modules["homeassistant.exceptions"]
 _exc_mod.ConfigEntryNotReady = type("ConfigEntryNotReady", (Exception,), {})
 _exc_mod.HomeAssistantError = type("HomeAssistantError", (Exception,), {})
+_exc_mod.ServiceValidationError = type(
+    "ServiceValidationError", (_exc_mod.HomeAssistantError,), {}
+)
 
 sys.modules["homeassistant.const"].Platform = MagicMock()
 
@@ -206,6 +222,17 @@ class _EntityBase:
     _attr_entity_category = None
     _attr_translation_key = None
     _attr_entity_registry_enabled_default = True
+    _attr_state_class = None
+    _attr_has_entity_name = False
+    _domain = None  # platform of the stub subclass (for translation lookup)
+
+    @property
+    def state_class(self):
+        return self._attr_state_class
+
+    @property
+    def has_entity_name(self):
+        return self._attr_has_entity_name
 
     @property
     def entity_category(self):
@@ -221,7 +248,13 @@ class _EntityBase:
 
     @property
     def name(self):
-        return self._attr_name
+        """Like HA: an explicit name wins, else the English entity translation."""
+        if self._attr_name is not None:
+            return self._attr_name
+        if self._attr_has_entity_name and self._attr_translation_key:
+            platform = _EN_ENTITY_TRANSLATIONS.get(self._domain, {})
+            return platform.get(self._attr_translation_key, {}).get("name")
+        return None
 
     @property
     def unique_id(self):
@@ -242,23 +275,27 @@ class _EntityBase:
 for _platform_mod, _entity_attrs in (
     (
         "homeassistant.components.sensor",
-        {"SensorEntity": type("SensorEntity", (_EntityBase,), {})},
+        {"SensorEntity": type("SensorEntity", (_EntityBase,), {"_domain": "sensor"})},
     ),
     (
         "homeassistant.components.binary_sensor",
-        {"BinarySensorEntity": type("BinarySensorEntity", (_EntityBase,), {})},
+        {
+            "BinarySensorEntity": type(
+                "BinarySensorEntity", (_EntityBase,), {"_domain": "binary_sensor"}
+            )
+        },
     ),
     (
         "homeassistant.components.select",
-        {"SelectEntity": type("SelectEntity", (_EntityBase,), {})},
+        {"SelectEntity": type("SelectEntity", (_EntityBase,), {"_domain": "select"})},
     ),
     (
         "homeassistant.components.button",
-        {"ButtonEntity": type("ButtonEntity", (_EntityBase,), {})},
+        {"ButtonEntity": type("ButtonEntity", (_EntityBase,), {"_domain": "button"})},
     ),
     (
         "homeassistant.components.switch",
-        {"SwitchEntity": type("SwitchEntity", (_EntityBase,), {})},
+        {"SwitchEntity": type("SwitchEntity", (_EntityBase,), {"_domain": "switch"})},
     ),
 ):
     if _platform_mod not in sys.modules:
@@ -274,6 +311,17 @@ class _SensorDeviceClass:
 
 
 sys.modules["homeassistant.components.sensor"].SensorDeviceClass = _SensorDeviceClass
+
+
+class _SensorStateClass:
+    """Stand-in for HA's sensor.SensorStateClass enum (values as in HA)."""
+
+    MEASUREMENT = "measurement"
+    TOTAL = "total"
+    TOTAL_INCREASING = "total_increasing"
+
+
+sys.modules["homeassistant.components.sensor"].SensorStateClass = _SensorStateClass
 
 
 class _BinarySensorDeviceClass:

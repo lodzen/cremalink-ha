@@ -11,30 +11,16 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES
 
+#: Monitor predicates: (key, icon, device class). Names come from the entity
+#: translations, keyed by ``key``.
 BINARY_SENSORS = [
-    ("is_busy", "Busy", None, BinarySensorDeviceClass.RUNNING),
-    ("is_idle", "Idle", "mdi:sleep", None),
-    (
-        "is_watertank_open",
-        "Water Tank Open",
-        "mdi:water-boiler-alert",
-        BinarySensorDeviceClass.DOOR,
-    ),
-    (
-        "is_watertank_empty",
-        "Water Tank Empty",
-        "mdi:water-off",
-        BinarySensorDeviceClass.PROBLEM,
-    ),
-    (
-        "is_waste_container_full",
-        "Waste Container Full",
-        "mdi:delete-alert",
-        BinarySensorDeviceClass.PROBLEM,
-    ),
+    ("is_busy", None, BinarySensorDeviceClass.RUNNING),
+    ("is_idle", "mdi:sleep", None),
+    ("is_watertank_open", "mdi:water-boiler-alert", BinarySensorDeviceClass.DOOR),
+    ("is_watertank_empty", "mdi:water-off", BinarySensorDeviceClass.PROBLEM),
+    ("is_waste_container_full", "mdi:delete-alert", BinarySensorDeviceClass.PROBLEM),
     (
         "is_waste_container_missing",
-        "Waste Container Missing",
         "mdi:delete-alert",
         BinarySensorDeviceClass.PROBLEM,
     ),
@@ -63,10 +49,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = data["coordinator"]
 
     entities = []
-    for key, name, icon, dev_class in BINARY_SENSORS:
-        entities.append(
-            CremalinkBinarySensor(coordinator, entry, key, name, icon, dev_class)
-        )
+    for key, icon, dev_class in BINARY_SENSORS:
+        entities.append(CremalinkBinarySensor(coordinator, entry, key, icon, dev_class))
 
     # Every other documented monitor bit: motor position, clean knob, doors,
     # hardware faults… Rare faults are registered but disabled by default.
@@ -94,20 +78,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class CremalinkBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Representation of a Cremalink binary sensor."""
 
-    def __init__(self, coordinator, entry, key, name, icon, dev_class):
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, entry, key, icon, dev_class):
         """Initialize the binary sensor.
 
         Args:
             coordinator: The data update coordinator.
             entry: The config entry.
-            key: The key to identify the sensor data.
-            name: The name of the sensor.
+            key: The key to identify the sensor data (also its translation key).
             icon: The icon for the sensor.
             dev_class: The device class of the sensor.
         """
         super().__init__(coordinator)
         self._key = key
-        self._attr_name = name
+        self._attr_translation_key = key
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_icon = icon
         self._attr_device_class = dev_class
@@ -171,13 +156,7 @@ class CremalinkBitSensor(CremalinkBinarySensor):
             icon: The icon for the sensor.
             dev_class: The device class of the sensor.
         """
-        shared = {b.key for b in SWITCH_BITS.values()} & {
-            b.key for b in ALARM_BITS.values()
-        }
-        label = f"{bit.label} ({source})" if bit.key in shared else bit.label
-        super().__init__(
-            coordinator, entry, f"{source}_{bit.key}", label, icon, dev_class
-        )
+        super().__init__(coordinator, entry, f"{source}_{bit.key}", icon, dev_class)
         self._source = source
         self._bit_key = bit.key
         self._attr_entity_registry_enabled_default = bit.common

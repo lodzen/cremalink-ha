@@ -24,6 +24,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class CremalinkPowerSwitch(CoordinatorEntity, SwitchEntity):
     """Representation of a Cremalink power switch."""
 
+    _attr_has_entity_name = True
+    _attr_translation_key = "power"
+
     def __init__(self, coordinator, device, entry):
         """Initialize the switch.
 
@@ -34,7 +37,6 @@ class CremalinkPowerSwitch(CoordinatorEntity, SwitchEntity):
         """
         super().__init__(coordinator)
         self.device = device
-        self._attr_name = "Power"
         self._attr_unique_id = f"{entry.entry_id}_power"
         self._attr_icon = "mdi:power"
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)

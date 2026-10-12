@@ -5,7 +5,14 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_CONNECTION_TYPE, DOMAIN, NOT_READY_STATUSES, STANDBY_STATUSES
+from .const import (
+    BUTTON_UNAVAILABLE_STATUSES,
+    CONF_CONNECTION_TYPE,
+    DOMAIN,
+    NOT_BREWING_STATUSES,
+    NOT_READY_STATUSES,
+    TRANSLATED_COMMANDS,
+)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -34,6 +41,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class CremalinkButton(CoordinatorEntity, ButtonEntity):
     """Representation of a Cremalink button."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, device, cmd, entry):
         """Initialize the button.
 
@@ -47,7 +56,11 @@ class CremalinkButton(CoordinatorEntity, ButtonEntity):
         self.device = device
         self._cmd = cmd
         self._title = cmd.replace("_", " ").title()
-        self._attr_name = f"{'Brew' if self._title not in ['Stop'] else ''} {self._title} {'brewing' if self._title in ['Stop'] else ''}"
+        if cmd in TRANSLATED_COMMANDS:
+            self._attr_translation_key = f"cmd_{cmd}"
+        else:
+            # A command of a custom device map: no translation shipped.
+            self._attr_name = f"Brew {self._title}"
         self._attr_unique_id = f"{entry.entry_id}_cmd_{cmd}"
         self._attr_icon = "mdi:coffee"
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
@@ -59,13 +72,13 @@ class CremalinkButton(CoordinatorEntity, ButtonEntity):
 
     @property
     def available(self):
-        """Reachable and awake (drinks also need the machine fully woken up).
+        """Stop only while a brew runs; drinks unless asleep, waking or brewing.
 
-        Availability follows only the machine status, never the monitor's
-        action byte: that byte flips while the machine goes to sleep or
-        brews, and every unavailable -> available flip of a button shows up
-        in Home Assistant as if it had been pressed. A busy machine is
-        rejected in :meth:`async_press` instead.
+        The transition into standby (``going_to_sleep``) does not make any
+        button unavailable; standby itself does. A press during the
+        transition is rejected in :meth:`async_press`. ``is_busy`` (the
+        monitor's action byte, latched in standby) only counts as a running
+        brew while the status says so.
         """
         data = self.coordinator.data
         if not super().available or not data:
@@ -75,8 +88,10 @@ class CremalinkButton(CoordinatorEntity, ButtonEntity):
             # No monitor reading yet (startup): do not claim availability
             # that the first real reading may withdraw seconds later.
             return False
-        blocked = STANDBY_STATUSES if self._title == "Stop" else NOT_READY_STATUSES
-        return status not in blocked
+        brewing = status not in NOT_BREWING_STATUSES and bool(data.is_busy)
+        if self._title == "Stop":
+            return brewing
+        return status not in BUTTON_UNAVAILABLE_STATUSES and not brewing
 
     async def async_press(self):
         """Handle the button press."""
