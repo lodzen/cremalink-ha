@@ -56,6 +56,16 @@ class TestNativeSource:
         water = by_uid["entry1_stat_water_total"]
         assert water._attr_native_unit_of_measurement == "L"
 
+    def test_statistics_are_total_increasing(self):
+        _, entities = _setup()
+        stats = _stat_entities(entities)
+        assert stats
+        for entity in stats:
+            assert entity.state_class == "total_increasing", entity.unique_id
+        # The live monitor readings are not lifetime counters.
+        monitor = [e for e in entities if e not in stats]
+        assert all(e.state_class is None for e in monitor)
+
     def test_cloud_entry_native_map_creates_none(self):
         _, entities = _setup(connection=CONNECTION_CLOUD)
         assert _stat_entities(entities) == []
@@ -85,6 +95,7 @@ class TestCloudCounters:
         stats = _stat_entities(entities)
         assert stats
         assert all(e.unique_id.startswith("entry1_stat_") for e in stats)
+        assert all(e.state_class == "total_increasing" for e in stats)
 
     def test_absent_candidates_produce_no_entity(self):
         _, entities = _setup(

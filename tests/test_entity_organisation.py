@@ -64,15 +64,19 @@ class TestStopButton:
         _, _, entities = _setup(button_mod, monitor)
         assert _by_uid(entities, "entry1_cmd_stop").available is False
 
-    def test_availability_does_not_follow_the_action_byte(self):
+    def test_available_only_while_a_brew_runs(self):
         busy = FakeMonitorData(status_name="ready", is_busy=True)
         _, coordinator, entities = _setup(button_mod, busy)
         stop = _by_uid(entities, "entry1_cmd_stop")
         assert stop.available is True
         coordinator.data = FakeMonitorData(status_name="ready", is_busy=False)
-        assert stop.available is True
+        assert stop.available is False
+        # Wake-up and rinse also move the action byte, but are no brew.
+        for status in ("waking_up", "rinsing", "going_to_sleep", "in_standby"):
+            coordinator.data = FakeMonitorData(status_name=status, is_busy=True)
+            assert stop.available is False, status
 
-    def test_stop_is_always_sent_when_awake(self):
+    def test_stop_is_always_sent_when_pressed(self):
         calls = []
         _, _, entities = _setup(
             button_mod,
@@ -84,16 +88,36 @@ class TestStopButton:
 
 
 class TestBrewButtons:
-    def test_unavailable_whenever_the_machine_is_not_awake(self):
+    def test_unavailable_in_standby_and_while_waking_but_not_while_going_to_sleep(
+        self,
+    ):
         _, coordinator, entities = _setup(
             button_mod, FakeMonitorData(status_name="ready", is_busy=False)
         )
         espresso = _by_uid(entities, "entry1_cmd_espresso")
-        for status in ("in_standby", "going_to_sleep", "waking_up"):
+        for status, expected in (
+            ("ready", True),
+            ("going_to_sleep", True),  # the transition itself keeps them available
+            ("in_standby", False),
+            ("waking_up", False),
+            ("rinsing", True),
+            ("ready", True),
+        ):
             coordinator.data = FakeMonitorData(status_name=status, is_busy=False)
-            assert espresso.available is False, status
-        coordinator.data = FakeMonitorData(status_name="ready", is_busy=False)
-        assert espresso.available is True
+            assert espresso.available is expected, status
+
+    def test_going_to_sleep_does_not_change_any_button(self):
+        # The transition into standby must not grey any button out, even
+        # though the action byte is latched (busy) during the sleep sequence.
+        _, coordinator, entities = _setup(
+            button_mod, FakeMonitorData(status_name="ready", is_busy=False)
+        )
+        before = {e.unique_id: e.available for e in entities}
+        for _ in range(3):
+            coordinator.data = FakeMonitorData(
+                status_name="going_to_sleep", is_busy=True
+            )
+            assert {e.unique_id: e.available for e in entities} == before
 
     def test_unavailable_until_the_first_status_is_known(self):
         # Startup: an empty first reading must not briefly report "available"
@@ -102,14 +126,24 @@ class TestBrewButtons:
         for entity in entities:
             assert entity.available is False
 
-    def test_availability_ignores_the_action_byte(self):
+    def test_only_stop_is_available_while_a_brew_runs(self):
         _, coordinator, entities = _setup(
             button_mod, FakeMonitorData(status_name="ready", is_busy=False)
         )
         espresso = _by_uid(entities, "entry1_cmd_espresso")
-        for busy in (False, True, False, True):
-            coordinator.data = FakeMonitorData(status_name="ready", is_busy=busy)
-            assert espresso.available is True
+        stop = _by_uid(entities, "entry1_cmd_stop")
+        assert (espresso.available, stop.available) == (True, False)
+        coordinator.data = FakeMonitorData(status_name="ready", is_busy=True)
+        assert (espresso.available, stop.available) == (False, True)
+        coordinator.data = FakeMonitorData(status_name="ready", is_busy=False)
+        assert (espresso.available, stop.available) == (True, False)
+
+    def test_standby_makes_every_button_unavailable_despite_latched_action(self):
+        _, _, entities = _setup(
+            button_mod, FakeMonitorData(status_name="in_standby", is_busy=True)
+        )
+        for entity in entities:
+            assert entity.available is False
 
     def test_press_when_ready_brews(self):
         calls = []
@@ -153,9 +187,7 @@ class TestEntityCategories:
         _, _, entities = _setup(sensor_mod, FakeMonitorData(status_name="ready"))
         for uid in ("status_name", "progress_percent", "accessory_name"):
             assert _by_uid(entities, f"entry1_{uid}").entity_category is None
-        assert _by_uid(entities, "entry1_action_code").entity_category == (
-            EntityCategory.DIAGNOSTIC
-        )
+        assert "entry1_action_code" not in {e.unique_id for e in entities}
         stats = [e for e in entities if "_stat_" in e.unique_id]
         assert stats
         assert all(e.entity_category is None for e in stats)
@@ -298,7 +330,7 @@ class TestCleanNames:
 
     def test_expected_clean_names(self):
         _, _, sensors = _setup(sensor_mod, FakeMonitorData(status_name="ready"))
-        assert _by_uid(sensors, "entry1_action_code").name == "Action Code"
+        assert _by_uid(sensors, "entry1_status_name").name == "Status"
         _, _, selects = _setup(select_mod, FakeMonitorData(status_name="ready"))
         assert _by_uid(selects, "entry1_profile").name == "Profile"
         assert _by_uid(selects, "entry1_setting_auto_off").name == "Auto-Off"

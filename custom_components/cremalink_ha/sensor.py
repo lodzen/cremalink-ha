@@ -1,30 +1,33 @@
 """Sensor platform for the Cremalink integration."""
 
 from cremalink.ecam.statistics import CLOUD_COUNTER_CANDIDATES, STAT_LABELS
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfVolume
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import PERCENTAGE, UnitOfVolume
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, CONNECTION_CLOUD, DOMAIN, STANDBY_STATUSES
 
-#: Monitor-value sensors: (key, name, icon, unit, enum_profile_key).
-#: Enum-keyed sensors expose translated states (T043/FR-033).
+#: Monitor-value sensors: (key, icon, unit, enum_profile_key). Names come from
+#: the entity translations (``cremalink_<key>``); enum-keyed sensors also
+#: expose translated states (T043/FR-033).
 MONITOR_SENSORS = [
-    ("status_name", "Status", "mdi:coffee-maker", None, "status"),
-    ("progress_percent", "Progress", "mdi:progress-clock", PERCENTAGE, None),
-    ("accessory_name", "Accessory", "mdi:cup", None, "accessory"),
-    ("action_code", "Action Code", "mdi:state-machine", None, None),
+    ("status_name", "mdi:coffee-maker", None, "status"),
+    ("progress_percent", "mdi:progress-clock", PERCENTAGE, None),
+    ("accessory_name", "mdi:cup", None, "accessory"),
 ]
-
-#: MONITOR_SENSORS keys in the normal entity section; Action Code and the
-#: statistics sensors are diagnostic / normal respectively.
-_PRIMARY_SENSOR_KEYS = {"status_name", "progress_percent", "accessory_name"}
 
 #: Fields suppressed while the machine is in a standby-like status — the
 #: machine stops evaluating them, so entities retain their last live value
 #: instead (T044/FR-034).
-_STANDBY_RETAINED_KEYS = {"progress_percent", "accessory_name", "action_code"}
+_STANDBY_RETAINED_KEYS = {"progress_percent", "accessory_name"}
+
+#: Cloud "counters" that are state readings, not lifetime counters.
+_NON_COUNTER_LOGICAL = {"descale_status", "water_hardness"}
 
 #: A2-id → unique-id suffix overrides; everything else is stat_<label>.
 _STAT_SUFFIX_OVERRIDES = {
@@ -68,13 +71,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     entities = []
     enums = getattr(getattr(device, "monitor_profile", None), "enums", {}) or {}
-    for key, name, icon, unit, enum_key in MONITOR_SENSORS:
+    for key, icon, unit, enum_key in MONITOR_SENSORS:
         entities.append(
             CremalinkSensor(
                 coordinator,
                 entry,
                 key,
-                name,
                 icon,
                 unit,
                 options=sorted(set(enums.get(enum_key, {}).values())) or None,
@@ -104,6 +106,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class _CremalinkEntityBase(CoordinatorEntity):
     """Shared availability/lifecycle rules for Cremalink entities."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
@@ -122,32 +126,27 @@ class _CremalinkEntityBase(CoordinatorEntity):
 class CremalinkSensor(_CremalinkEntityBase, SensorEntity):
     """Representation of a Cremalink monitor sensor."""
 
-    def __init__(self, coordinator, entry, key, name, icon, unit, options=None):
+    def __init__(self, coordinator, entry, key, icon, unit, options=None):
         """Initialize the sensor.
 
         Args:
             coordinator: The data update coordinator.
             entry: The config entry.
             key: The key to identify the sensor data.
-            name: The name of the sensor.
             icon: The icon for the sensor.
             unit: The unit of measurement for the sensor.
             options: Enum state options for translated enum sensors.
         """
         super().__init__(coordinator, entry)
         self._key = key
-        self._attr_name = name
+        self._attr_translation_key = f"cremalink_{key}"
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_icon = icon
         self._attr_native_unit_of_measurement = unit
-        self._attr_entity_category = (
-            None if key in _PRIMARY_SENSOR_KEYS else EntityCategory.DIAGNOSTIC
-        )
         self._standby_cache = None
         if options:
             self._attr_device_class = SensorDeviceClass.ENUM
             self._attr_options = options
-            self._attr_translation_key = f"cremalink_{key}"
 
     def _machine_in_standby(self):
         status = getattr(self.coordinator.data, "status_name", None)
@@ -169,10 +168,12 @@ class CremalinkSensor(_CremalinkEntityBase, SensorEntity):
 class CremalinkStatisticSensor(_CremalinkEntityBase, SensorEntity):
     """Native 0xA2 statistics sensor (LAN-only)."""
 
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
     def __init__(self, coordinator, entry, a2_id, label, unit):
         super().__init__(coordinator, entry)
         self._a2_id = a2_id
-        self._attr_name = label.replace("_", " ").title()
+        self._attr_translation_key = f"stat_{label}"
         self._attr_unique_id = f"{entry.entry_id}_{_stat_suffix(a2_id, label)}"
         self._attr_icon = "mdi:counter"
         if unit == "l":
@@ -194,7 +195,12 @@ class CremalinkCloudCounterSensor(_CremalinkEntityBase, SensorEntity):
     def __init__(self, coordinator, entry, logical):
         super().__init__(coordinator, entry)
         self._logical = logical
-        self._attr_name = logical.replace("_", " ").title()
+        self._attr_translation_key = f"stat_{logical}"
+        self._attr_state_class = (
+            None
+            if logical in _NON_COUNTER_LOGICAL
+            else SensorStateClass.TOTAL_INCREASING
+        )
         self._attr_unique_id = f"{entry.entry_id}_stat_{logical}"
         self._attr_icon = "mdi:counter"
 

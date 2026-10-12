@@ -1,12 +1,163 @@
 {
   "entity": {
+    "switch": {
+      "power": {
+        "name": "Ein/Aus"
+      }
+    },
     "select": {
+      "profile": {
+        "name": "Profil"
+      },
+      "setting_auto_off": {
+        "name": "Automatische Abschaltung"
+      },
       "setting_water_hardness": {
+        "name": "Wasserhärte",
         "state": {
           "level_1": "Stufe 1",
           "level_2": "Stufe 2",
           "level_3": "Stufe 3",
           "level_4": "Stufe 4"
+        }
+      }
+    },
+    "button": {
+      "cmd_americano": { "name": "Zubereiten: Americano" },
+      "cmd_caffe_latte": { "name": "Zubereiten: Caffè Latte" },
+      "cmd_cappuccino": { "name": "Zubereiten: Cappuccino" },
+      "cmd_cappuccino_mix": { "name": "Zubereiten: Cappuccino Mix" },
+      "cmd_cappuccino_plus": { "name": "Zubereiten: Cappuccino Plus" },
+      "cmd_coffee": { "name": "Zubereiten: Kaffee" },
+      "cmd_cortado": { "name": "Zubereiten: Cortado" },
+      "cmd_doppio_plus": { "name": "Zubereiten: Doppio Plus" },
+      "cmd_double_espresso": { "name": "Zubereiten: Doppelter Espresso" },
+      "cmd_espresso": { "name": "Zubereiten: Espresso" },
+      "cmd_espresso_macchiato": { "name": "Zubereiten: Espresso Macchiato" },
+      "cmd_espresso_soul": { "name": "Zubereiten: Espresso Soul" },
+      "cmd_flat_white": { "name": "Zubereiten: Flat White" },
+      "cmd_hot_milk": { "name": "Zubereiten: Heiße Milch" },
+      "cmd_hot_water": { "name": "Zubereiten: Heißes Wasser" },
+      "cmd_latte_macchiato": { "name": "Zubereiten: Latte Macchiato" },
+      "cmd_long_coffee": { "name": "Zubereiten: Langer Kaffee" },
+      "cmd_stop": { "name": "Stopp Zubereitung" }
+    },
+    "binary_sensor": {
+      "is_busy": { "name": "Beschäftigt" },
+      "is_idle": { "name": "Leerlauf" },
+      "is_watertank_open": { "name": "Wassertank offen" },
+      "is_watertank_empty": { "name": "Wassertank leer" },
+      "is_waste_container_full": { "name": "Kaffeesatzbehälter voll" },
+      "is_waste_container_missing": { "name": "Kaffeesatzbehälter fehlt" },
+      "switch_water_spout": { "name": "Wasserdüse" },
+      "switch_motor_up": { "name": "Motor oben" },
+      "switch_motor_down": { "name": "Motor unten" },
+      "switch_water_tank_absent": { "name": "Wassertank fehlt" },
+      "switch_knob": { "name": "Drehregler" },
+      "switch_water_level_low": { "name": "Wasserstand niedrig" },
+      "switch_coffee_jug_present": { "name": "Kaffeekanne eingesetzt" },
+      "switch_milk_carafe_present": { "name": "Milchkaraffe eingesetzt" },
+      "switch_choco_tank_present": { "name": "Schokoladenbehälter eingesetzt" },
+      "switch_clean_knob": { "name": "Reinigungsknopf (Schalter)" },
+      "switch_door_opened": { "name": "Tür geöffnet" },
+      "switch_preground_door_opened": { "name": "Pulverkaffee-Klappe geöffnet" },
+      "alarm_descale": { "name": "Entkalkung erforderlich" },
+      "alarm_replace_water_filter": { "name": "Wasserfilter wechseln" },
+      "alarm_ground_too_fine": { "name": "Kaffee zu fein gemahlen" },
+      "alarm_beans_empty": { "name": "Kaffeebohnen leer" },
+      "alarm_machine_to_service": { "name": "Wartung erforderlich" },
+      "alarm_heater_probe_failure": { "name": "Fehler Kaffee-Heizungssensor" },
+      "alarm_too_much_coffee": { "name": "Zu viel Kaffee" },
+      "alarm_infuser_motor_not_working": { "name": "Brüheinheit-Motor defekt" },
+      "alarm_steamer_probe_failure": { "name": "Fehler Dampfsensor" },
+      "alarm_empty_drip_tray": { "name": "Tropfschale leeren" },
+      "alarm_hydraulic_circuit_problem": { "name": "Problem im Wasserkreislauf" },
+      "alarm_clean_knob": { "name": "Reinigungsknopf (Alarm)" },
+      "alarm_beans_empty_hopper_2": { "name": "Kaffeebohnen leer (Behälter 2)" },
+      "alarm_tank_too_full": { "name": "Wassertank zu voll" },
+      "alarm_bean_hopper_absent": { "name": "Bohnenbehälter fehlt" },
+      "alarm_grid_presence": { "name": "Abtropfgitter eingesetzt" },
+      "alarm_infuser_not_in_position": { "name": "Brüheinheit nicht in Position" },
+      "alarm_not_enough_coffee": { "name": "Zu wenig Kaffee" },
+      "alarm_expansion_comm_problem": { "name": "Kommunikationsfehler Erweiterungsmodul" },
+      "alarm_expansion_submodules_problem": { "name": "Fehler Erweiterungs-Untermodul" },
+      "alarm_grinding_unit_1_problem": { "name": "Problem Mahlwerk 1" },
+      "alarm_grinding_unit_2_problem": { "name": "Problem Mahlwerk 2" },
+      "alarm_condense_fan_problem": { "name": "Problem Kondensationslüfter" },
+      "alarm_clock_bt_comm_problem": { "name": "Kommunikationsfehler Uhrenplatine" },
+      "alarm_spi_comm_problem": { "name": "SPI-Kommunikationsfehler" }
+    },
+    "sensor": {
+      "cremalink_progress_percent": { "name": "Fortschritt" },
+      "stat_descales": { "name": "Entkalkungen" },
+      "stat_water_total": { "name": "Wasser gesamt" },
+      "stat_filters": { "name": "Filter" },
+      "stat_milk_cleans": { "name": "Milchreinigungen" },
+      "stat_total_black": { "name": "Schwarzer Kaffee gesamt" },
+      "stat_total_milk_coffee": { "name": "Milchkaffee gesamt" },
+      "stat_total_other": { "name": "Sonstige gesamt" },
+      "stat_total_milk_only": { "name": "Nur Milch gesamt" },
+      "stat_total_espressos": { "name": "Espressi gesamt" },
+      "stat_espresso": { "name": "Espresso" },
+      "stat_coffee": { "name": "Kaffee" },
+      "stat_long_coffee": { "name": "Langer Kaffee" },
+      "stat_doppio": { "name": "Doppio" },
+      "stat_americano": { "name": "Americano" },
+      "stat_cappuccino": { "name": "Cappuccino" },
+      "stat_latte_macchiato": { "name": "Latte Macchiato" },
+      "stat_caffe_latte": { "name": "Caffè Latte" },
+      "stat_flat_white": { "name": "Flat White" },
+      "stat_espresso_macchiato": { "name": "Espresso Macchiato" },
+      "stat_hot_milk": { "name": "Heiße Milch" },
+      "stat_cappuccino_doppio": { "name": "Cappuccino Doppio" },
+      "stat_cappuccino_mix": { "name": "Cappuccino Mix" },
+      "stat_hot_water": { "name": "Heißes Wasser" },
+      "stat_tea": { "name": "Tee" },
+      "stat_coffee_pot": { "name": "Kaffeekanne" },
+      "stat_choco": { "name": "Schokolade" },
+      "stat_tea_iced": { "name": "Eistee" },
+      "stat_total_beverages": { "name": "Getränke gesamt" },
+      "stat_total_other_beverages": { "name": "Sonstige Getränke gesamt" },
+      "stat_total_espresso": { "name": "Espresso gesamt" },
+      "stat_total_milk_drinks": { "name": "Milchgetränke gesamt" },
+      "stat_cappuccino_reverse": { "name": "Cappuccino Reverse" },
+      "stat_cortado": { "name": "Cortado" },
+      "stat_long_black": { "name": "Long Black" },
+      "stat_mug_to_go": { "name": "Mug to go" },
+      "stat_brew_over_ice": { "name": "Brew over Ice" },
+      "stat_grounds_counter": { "name": "Kaffeesatz-Zähler" },
+      "stat_water_total_quantity": { "name": "Wassermenge gesamt" },
+      "stat_water_filter_quantity": { "name": "Wassermenge Filter" },
+      "stat_descale_status": { "name": "Entkalkungsstatus" },
+      "stat_water_hardness": { "name": "Wasserhärte" },
+      "cremalink_status_name": {
+        "name": "Status",
+        "state": {
+          "in_standby": "Standby",
+          "waking_up": "Wacht auf",
+          "going_to_sleep": "Geht in Standby",
+          "descaling": "Entkalkung läuft",
+          "preparing_steam": "Dampf wird erzeugt",
+          "ready": "Bereit",
+          "rinsing": "Spülvorgang",
+          "preparing_milk": "Milch wird zubereitet",
+          "dispensing_hot_water": "Heißwasser wird ausgegeben",
+          "cleaning_milk": "Milchsystem wird gereinigt",
+          "preparing_chocolate": "Schokolade wird zubereitet",
+          "preparing_milk_alt": "Milch wird zubereitet",
+          "unknown_29": "Beschäftigt"
+        }
+      },
+      "cremalink_accessory_name": {
+        "name": "Zubehör",
+        "state": {
+          "none": "Keines",
+          "hot_water_spout": "Heißwasserdüse",
+          "latte_crema_hot": "LatteCrema-Karaffe (heiß)",
+          "chocolate": "Schokoladenbehälter",
+          "latte_crema_hot_clean": "LatteCrema-Karaffe (Reinigungsposition)",
+          "latte_crema_cool": "LatteCrema-Karaffe (kalt)",
+          "latte_crema_cool_clean": "LatteCrema-Karaffe (kalt, Reinigungsposition)"
         }
       }
     }

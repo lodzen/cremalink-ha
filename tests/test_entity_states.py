@@ -69,9 +69,9 @@ class TestEnumTranslations:
         _, entities = _setup(sensor_mod)
         translations = json.loads(EN_JSON.read_text())
         for entity in entities:
-            key = getattr(entity, "_attr_translation_key", None)
-            if not key:
-                continue
+            if not getattr(entity, "_attr_options", None):
+                continue  # only enum sensors carry state translations
+            key = entity._attr_translation_key
             for label in translations["entity"]["sensor"][key]["state"].values():
                 assert "_" not in label
 

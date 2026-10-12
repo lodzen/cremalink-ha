@@ -9,7 +9,10 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import translation
 
 from cremalink import (
     Client,
@@ -85,6 +88,50 @@ def _async_create_reconfigure_issue(hass: HomeAssistant, entry: ConfigEntry) -> 
             "dsn": entry.data.get(CONF_DSN, ""),
         },
     )
+
+
+async def _async_clear_legacy_entity_names(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Drop stored custom names that only freeze the old English default.
+
+    Early versions named entities "<title> <English name>", and renaming the
+    device in the UI stored "<device name> <English name>" as every entity's
+    custom name. A stored name always beats the entity translation, so those
+    entities would stay English forever. Only names that are exactly
+    "<a device name> <default name>" (or the bare default) are cleared; a
+    genuine customisation never matches and stays.
+    """
+    ent_reg = er.async_get(hass)
+    stored = [
+        reg
+        for reg in er.async_entries_for_config_entry(ent_reg, entry.entry_id)
+        if reg.name
+    ]
+    if not stored:
+        return
+    dev_reg = dr.async_get(hass)
+    english = await translation.async_get_translations(hass, "en", "entity", {DOMAIN})
+    for reg in stored:
+        device = dev_reg.async_get(reg.device_id) if reg.device_id else None
+        prefixes = {
+            entry.title,
+            entry.data.get(DEVICE_NAME),
+            getattr(device, "name", None),
+            getattr(device, "name_by_user", None),
+        }
+        key = f"component.{DOMAIN}.entity.{reg.domain}.{reg.translation_key}.name"
+        defaults = {name for name in (reg.original_name, english.get(key)) if name}
+        legacy = defaults | {
+            f"{prefix} {name}" for prefix in prefixes if prefix for name in defaults
+        }
+        if reg.name in legacy:
+            ent_reg.async_update_entity(reg.entity_id, name=None)
+            _LOGGER.info(
+                "Cleared the stored name %r of %s so its translated name applies",
+                reg.name,
+                reg.entity_id,
+            )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -226,6 +273,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
+    await _async_clear_legacy_entity_names(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

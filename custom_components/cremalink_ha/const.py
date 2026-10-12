@@ -46,3 +46,38 @@ STANDBY_STATUSES = {"in_standby", "going_to_sleep", "sleeping", "deep_sleep"}
 
 #: Statuses in which the machine cannot start a drink (asleep or still waking).
 NOT_READY_STATUSES = STANDBY_STATUSES | {"waking_up"}
+
+#: Statuses in which the monitor's action byte does not mean "a drink is
+#: being brewed": the standby family (the byte stays latched), waking up, and
+#: the power-on/off rinse. Button availability must not follow it there.
+NOT_BREWING_STATUSES = NOT_READY_STATUSES | {"rinsing"}
+
+#: Device-map commands that have an entity translation (``cmd_<command>``).
+#: Commands of custom maps fall back to a generated English name.
+TRANSLATED_COMMANDS = frozenset(
+    {
+        "americano",
+        "caffe_latte",
+        "cappuccino",
+        "cappuccino_mix",
+        "cappuccino_plus",
+        "coffee",
+        "cortado",
+        "doppio_plus",
+        "double_espresso",
+        "espresso",
+        "espresso_macchiato",
+        "espresso_soul",
+        "flat_white",
+        "hot_milk",
+        "hot_water",
+        "latte_macchiato",
+        "long_coffee",
+        "stop",
+    }
+)
+
+#: Statuses in which the drink buttons are unavailable: asleep or waking up.
+#: ``going_to_sleep`` is deliberately absent — the transition into standby
+#: must not grey the buttons out, only reaching standby does.
+BUTTON_UNAVAILABLE_STATUSES = (STANDBY_STATUSES - {"going_to_sleep"}) | {"waking_up"}
