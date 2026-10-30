@@ -2,6 +2,7 @@
 
 import asyncio
 
+import pytest
 from cremalink.ecam.profiles import ProfileSlot
 from custom_components.cremalink_ha import select as select_mod
 
@@ -94,3 +95,36 @@ class TestProfileSelect:
         )
         profile = next(e for e in entities if e.unique_id == "entry1_profile")
         assert profile.current_option == "Bob"
+
+    def test_machine_read_profile_updates_option_on_coordinator_update(self):
+        # The coordinator's param-0x03EE refresh lands in
+        # device.current_profile; an update must re-map the option (T055).
+        _, entities = _setup(
+            get_profiles=lambda: _slots((1, "Alice"), (2, "Bob")),
+            current_profile=1,
+        )
+        profile = next(e for e in entities if e.unique_id == "entry1_profile")
+        assert profile.current_option == "Alice"
+        profile.device.current_profile = 2
+        profile._handle_coordinator_update()
+        assert profile.current_option == "Bob"
+
+    @pytest.mark.parametrize(
+        "status", ["in_standby", "going_to_sleep", "sleeping", "waking_up"]
+    )
+    def test_profile_select_unavailable_in_not_ready_states(self, status):
+        # Observed behaviour of the official app: profile selection is the
+        # only setting unavailable while the machine is asleep — config
+        # settings (beep, energy, …) stay available (see switch tests).
+        hass = FakeHass()
+        device = make_device(
+            get_profiles=lambda: _slots((1, "Alice"), (2, "Bob")),
+            current_profile=1,
+        )
+        monitor = FakeMonitorData(status_name=status)
+        _, entities = setup_entities(hass, FakeEntry(), device, select_mod, monitor)
+        profile = next(e for e in entities if e.unique_id == "entry1_profile")
+        assert profile.available is False
+        monitor.status_name = "ready"
+        profile._handle_coordinator_update()
+        assert profile.available is True

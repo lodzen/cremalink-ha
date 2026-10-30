@@ -3,8 +3,10 @@
 import logging
 import time
 from datetime import timedelta
+from functools import partial
 
 from cremalink.domain.device import Device
+from cremalink.ecam.settings import SETTING_BIT_MAPS, SETTING_OPTION_MAPS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -19,9 +21,32 @@ SCAN_INTERVAL_SLOW = timedelta(seconds=30)
 #: 0xA2 paging session and cloud property snapshots do not need fast polls).
 STATISTICS_INTERVAL = timedelta(minutes=5)
 
+#: Settings tracking cadence. Panel-side changes republish the backing
+#: ``dNNN`` datapoint within ~6 s of a ``request_property`` GET
+#: (protocol.md §14.11); 15 s keeps HA state close to the machine without
+#: flooding the single-GET-per-poll command queue.
+SETTINGS_INTERVAL = timedelta(seconds=15)
+
+#: Datapoint hints backing live entities — the refresh requests only
+#: these (aoff/water/user_conf → 3 GETs) so interactive commands aren't
+#: starved by a 6-GET burst on the single-GET-per-poll drain.
+_SETTINGS_HOT_HINTS = {
+    s.datapoint_hint
+    for maps in (SETTING_OPTION_MAPS, SETTING_BIT_MAPS)
+    for s in maps.values()
+    if s.datapoint_hint
+}
+
 #: Consecutive failed refreshes tolerated before entities go unavailable
 #: (FR-035 — a single transient LAN/transport failure must not flap state).
-DEFAULT_FAILURE_THRESHOLD = 3
+#: At the 1 s awake cadence this means ~5 s of total monitor outage.
+DEFAULT_FAILURE_THRESHOLD = 5
+
+#: Monitor-fetch attempts per coordinator cycle — the machine drops or
+#: delays answers when busy/rate-limited (observed 2026-10-14), and one
+#: lost reply must not count as a refresh failure.
+MONITOR_ATTEMPTS = 3
+MONITOR_RETRY_DELAY = 0.7
 
 
 class CremalinkCoordinator(DataUpdateCoordinator):
@@ -65,6 +90,53 @@ class CremalinkCoordinator(DataUpdateCoordinator):
         # Read-failure retention (T045/FR-035).
         self.consecutive_failures = 0
         self.failure_threshold = DEFAULT_FAILURE_THRESHOLD
+        # Settings slow lane (§14.11): machine-confirmed option values and
+        # param-0x003F bit states, refreshed at SETTINGS_INTERVAL so
+        # entities track panel-side edits, not just our own writes.
+        self.settings: dict[str, int | None] | None = None
+        self.setting_bits: dict[str, bool | None] | None = None
+        self._settings_fetched_at: float | None = None
+        # First-update fast path: land only the monitor so entities go
+        # available ~1 poll in; slow lanes (profile/settings/statistics
+        # GET bursts) defer to the next cycle — §14.12 queue discipline.
+        self._first_update_done = False
+
+    async def _async_fetch_settings(self) -> None:
+        """Refresh the tracked settings values/bits when due.
+
+        ``get_settings`` requests + harvests every settings datapoint;
+        ``get_setting_bits(refresh=False)`` then reads param ``0x003F``
+        off the freshly stored republishes — one GET round total.
+        Failures keep the previous values: transient LAN errors must
+        not flap entity state (FR-035).
+        """
+        now = time.monotonic()
+        if (
+            self._settings_fetched_at is not None
+            and now - self._settings_fetched_at < SETTINGS_INTERVAL.total_seconds()
+        ):
+            return
+        self._settings_fetched_at = now
+        get_settings = getattr(self.device, "get_settings", None)
+        if get_settings is None:
+            return
+        try:
+            values = await self.hass.async_add_executor_job(
+                partial(get_settings, hints=_SETTINGS_HOT_HINTS)
+            )
+        except (OSError, ValueError, RuntimeError) as err:
+            _LOGGER.debug("Settings fetch failed: %s", err)
+            return
+        self.settings = values
+        get_setting_bits = getattr(self.device, "get_setting_bits", None)
+        if get_setting_bits is None:
+            return
+        try:
+            self.setting_bits = await self.hass.async_add_executor_job(
+                partial(get_setting_bits, refresh=False)
+            )
+        except (OSError, ValueError, RuntimeError) as err:
+            _LOGGER.debug("Setting-bits fetch failed: %s", err)
 
     async def _async_fetch_statistics(self) -> None:
         """Refresh the slow-lane statistics report when due.
@@ -118,7 +190,7 @@ class CremalinkCoordinator(DataUpdateCoordinator):
             )
 
         try:
-            data = await self.hass.async_add_executor_job(self.device.get_monitor)
+            data = await self.hass.async_add_executor_job(self._get_monitor)
 
             if (
                 self.embedded_server is not None
@@ -150,8 +222,50 @@ class CremalinkCoordinator(DataUpdateCoordinator):
                     self.update_interval = SCAN_INTERVAL_FAST
 
             self.consecutive_failures = 0
+            if not self._first_update_done:
+                # First cycle after (re)start: return the monitor now.
+                # The slow lanes below queue several property GETs and a
+                # statistics paging session that drain at one command
+                # per ~1.3 s machine poll (§14.12) — running them here
+                # would hold entities unavailable tens of seconds. They
+                # are due immediately on the next cycle (fetched-at is
+                # still None).
+                self._first_update_done = True
+                return data
+            # Param-0x03EE profile readback (T055, protocol.md §5/§14.8):
+            # track the machine's own selected profile so the select
+            # entity follows panel-side changes. Runs in standby too —
+            # the machine answered 0xA2 reads while in_standby — and the
+            # device self-throttles; failures must not flap the refresh.
+            refresh_profile = getattr(self.device, "refresh_current_profile", None)
+            if refresh_profile is not None:
+                try:
+                    await self.hass.async_add_executor_job(refresh_profile)
+                except (OSError, ValueError, RuntimeError) as err:
+                    _LOGGER.debug("current-profile refresh failed: %s", err)
+            await self._async_fetch_settings()
             await self._async_fetch_statistics()
             return data
         except Exception as err:
             self.consecutive_failures += 1
             raise UpdateFailed(f"Error communicating with device: {err}") from err
+
+    def _get_monitor(self):
+        """Fetch the monitor with retries — runs in the executor.
+
+        The machine intermittently drops or delays answers when busy;
+        one lost reply must not count toward the unavailability
+        threshold (the Status entity flapped to ``unknown`` on ~10 s
+        hiccups otherwise).
+        """
+        last_err: Exception | None = None
+        for attempt in range(MONITOR_ATTEMPTS):
+            try:
+                return self.device.get_monitor()
+            except (OSError, ValueError, RuntimeError) as err:
+                last_err = err
+                if attempt + 1 < MONITOR_ATTEMPTS:
+                    time.sleep(MONITOR_RETRY_DELAY)
+        if last_err is not None:
+            raise last_err
+        return self.device.get_monitor()

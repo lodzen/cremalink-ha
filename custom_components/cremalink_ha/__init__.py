@@ -260,7 +260,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DEFAULT_MONITOR_POLL_INTERVAL if embedded_server is not None else None
         ),
     )
-    await coordinator.async_config_entry_first_refresh()
 
     if embedded_server is not None:
         entry.async_on_unload(partial(_async_bounded_stop, embedded_server, dsn))
@@ -275,6 +274,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await _async_clear_legacy_entity_names(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # First refresh runs in the background: on a cold property store the
+    # monitor/settings/statistics GET sweep drains at one command per
+    # ~1.3 s machine poll (protocol.md §14.12), so awaiting it here would
+    # block Home Assistant startup by tens of seconds. Entities read as
+    # unavailable until the monitor lands — their `available` properties
+    # already model that — and the coordinator's own interval keeps
+    # retrying, so a machine that is offline at boot self-heals without
+    # a config-entry retry cycle.
+    entry.async_create_background_task(
+        hass, coordinator.async_refresh(), f"{DOMAIN}_{entry.entry_id}_first_refresh"
+    )
     return True
 
 

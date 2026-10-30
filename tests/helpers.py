@@ -62,14 +62,19 @@ def make_device(**overrides):
             ),
         ),
         current_profile=overrides.get("current_profile", 0),
+        refresh_current_profile=overrides.get("refresh_current_profile", lambda: None),
         get_monitor=overrides.get("get_monitor", lambda: FakeMonitorData()),
         get_statistics=overrides.get(
             "get_statistics", lambda: interpret([], source="native", complete=True)
         ),
         get_profiles=overrides.get("get_profiles", list),
         select_profile=overrides.get("select_profile", lambda index: True),
-        get_settings=overrides.get("get_settings", dict),
+        get_settings=overrides.get("get_settings", lambda **_: {}),
         set_setting=overrides.get("set_setting", lambda key, idx: True),
+        get_setting_bits=overrides.get(
+            "get_setting_bits", lambda *, refresh=True: {}
+        ),
+        set_setting_bit=overrides.get("set_setting_bit", lambda key, on: True),
         do=overrides.get("do", lambda name: None),
         configure=overrides.get("configure", lambda: None),
     )
@@ -81,6 +86,9 @@ def make_coordinator(hass, device, monitor=None, **kwargs):
     if monitor is not None:
         device.get_monitor = lambda: monitor
     coordinator = CremalinkCoordinator(hass, device, **kwargs)
+    # Tests model a running coordinator: skip the monitor-only first
+    # cycle so single `_async_update_data()` calls exercise steady state.
+    coordinator._first_update_done = True
     return coordinator
 
 
@@ -97,6 +105,11 @@ def setup_entities(hass, entry, device, platform_module, monitor=None):
 
     async def _setup():
         await platform_module.async_setup_entry(hass, entry, entities.extend)
+        # Platform priming is backgrounded (§14.12); run the scheduled
+        # tasks as a real event loop would before entities are asserted.
+        for coro in hass.tasks:
+            await coro
+        hass.tasks.clear()
 
     asyncio.run(_setup())
     return coordinator, entities

@@ -9,11 +9,12 @@ Three selects per contracts/ha-entities.md:
 """
 
 import logging
+from functools import partial
 
 from cremalink.ecam.settings import SETTING_OPTION_MAPS
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity, RestoreStateData
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -47,9 +48,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     async_add_entities(entities)
 
-    # Prime the machine-confirmed state (LAN reads run in the executor).
+    # Prime the machine-confirmed state in the background — the LAN
+    # reads cost seconds each on the one-command-per-poll lane
+    # (§14.12); awaiting them here would stall platform setup. Entities
+    # read as unknown until the refresh lands.
     for entity in entities:
-        await entity.async_refresh_state()
+        hass.async_create_task(entity.async_refresh_state())
 
 
 class _BaseSelect(CoordinatorEntity, SelectEntity):
@@ -98,8 +102,13 @@ class _BaseSelect(CoordinatorEntity, SelectEntity):
 class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
     """Occupied profile slots; selection is a session-gated 0xA9 write.
 
-    The machine does not report its active profile, so the last selection
-    made here is stored with the entity state and restored after a restart.
+    Non-striker machines have no current-profile read-back — the app
+    itself stores the selection app-side and only ever *tells* the
+    machine (``0x03EE`` is the striker register; it does not track
+    ``0xA9`` selects on Soul). ``Device.refresh_current_profile``
+    therefore returns the last-asserted profile; the remembered
+    selection is also restored after a restart. Like the official app,
+    profile selection is the one setting that is unavailable in standby.
     """
 
     def __init__(self, coordinator, device, entry):
@@ -110,6 +119,15 @@ class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
         self._slots: dict[str, int] = {}  # option label -> profile index
         self._current_option = None
         self._restored_index = None
+
+    @property
+    def available(self):
+        """Unavailable in standby-like states — the only gated setting."""
+        data = self.coordinator.data
+        status = getattr(data, "status_name", None) if data else None
+        if status is not None and status in NOT_READY_STATUSES:
+            return False
+        return super().available
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -141,6 +159,11 @@ class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
             None,
         )
 
+    def _handle_coordinator_update(self):
+        """Adopt the device's current profile between refreshes."""
+        self._update_current_option()
+        super()._handle_coordinator_update()
+
     @property
     def extra_state_attributes(self):
         """The remembered profile, kept independent of the readable slots."""
@@ -149,7 +172,11 @@ class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
 
     async def async_refresh_state(self):
         try:
-            slots = await self.hass.async_add_executor_job(self.device.get_profiles)
+            # coordinator.hass — always bound; entity.hass is unset when
+            # the setup priming task runs before the entity is added.
+            slots = await self.coordinator.hass.async_add_executor_job(
+                self.device.get_profiles
+            )
         except (OSError, ValueError, RuntimeError) as err:
             _LOGGER.debug("Profile fetch failed: %s", err)
             return
@@ -173,8 +200,9 @@ class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
         if index is None:
             raise ValueError(f"unknown profile option {option!r}")
         ok = await self.hass.async_add_executor_job(self.device.select_profile, index)
-        # Report only machine-confirmed state — a failed ack keeps the
-        # previous option rather than pretending the selection took.
+        # Non-striker applies 0xA9 without an ack (fire-and-forget like
+        # the app) — ok means "sent, no nack"; an explicit nack keeps
+        # the previous option rather than pretending the selection took.
         if ok:
             self._current_option = option
             self.async_write_ha_state()
@@ -200,9 +228,33 @@ class CremalinkSettingSelect(_BaseSelect):
             return None
         return self._setting.options.get(index)
 
+    def _handle_coordinator_update(self):
+        """Track machine-side option values between own writes.
+
+        The coordinator refreshes the republished settings datapoints at
+        SETTINGS_INTERVAL, so panel-side edits land here within seconds
+        (protocol.md §14.11).
+        """
+        values = getattr(self.coordinator, "settings", None)
+        if values is not None:
+            option = self._label_for(values.get(self._key))
+            if option is not None:
+                self._current_option = option
+        super()._handle_coordinator_update()
+
     async def async_refresh_state(self):
         try:
-            values = await self.hass.async_add_executor_job(self.device.get_settings)
+            # coordinator.hass — always bound; entity.hass is unset when
+            # the setup priming task runs before the entity is added.
+            # Scoped to this select's key+datapoint: a full sweep queues
+            # ~6 GETs on the one-command-per-poll lane (§14.12).
+            values = await self.coordinator.hass.async_add_executor_job(
+                partial(
+                    self.device.get_settings,
+                    hints={self._setting.datapoint_hint},
+                    keys={self._key},
+                )
+            )
         except (OSError, ValueError, RuntimeError) as err:
             _LOGGER.debug("Settings fetch failed: %s", err)
             return
@@ -223,16 +275,6 @@ class CremalinkSettingSelect(_BaseSelect):
         )
         if index is None:
             raise ValueError(f"unknown option {option!r} for {self._key}")
-        data = self.coordinator.data
-        if data is not None and data.status_name in NOT_READY_STATUSES:
-            # Never wake the machine for a configuration change: warn and
-            # abort. (The library enforces the same against a fresh reading.)
-            message = (
-                f"The machine has to be switched on to change {self.name}; "
-                "it is in standby. Switch it on and try again."
-            )
-            _LOGGER.warning(message)
-            raise ServiceValidationError(message)
         try:
             ok = await self.hass.async_add_executor_job(
                 self.device.set_setting, self._key, index
@@ -244,4 +286,11 @@ class CremalinkSettingSelect(_BaseSelect):
         if not ok:
             raise HomeAssistantError(f"The machine rejected the change of {self.name}.")
         self._current_option = option
+        # Patch the coordinator's tracked snapshot with the confirmed
+        # value — otherwise its next update restores the pre-write
+        # option until the next SETTINGS_INTERVAL fetch (the select
+        # visibly flapped back; switch.py does the same for bits).
+        values = getattr(self.coordinator, "settings", None)
+        if values is not None:
+            values[self._key] = index
         self.async_write_ha_state()
