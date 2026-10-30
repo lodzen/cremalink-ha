@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.abspath('../../custom_components'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'cremalink-ha'
-copyright = '2026, Midian Tekle Elfu'
-author = 'Midian Tekle Elfu'
+copyright = '2026, Lodzen'
+author = 'Lodzen'
 try:
     with open(os.path.abspath('../../custom_components/cremalink_ha/manifest.json'),
               encoding='utf-8') as f:
