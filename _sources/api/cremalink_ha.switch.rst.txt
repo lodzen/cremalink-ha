@@ -1,0 +1,7 @@
+cremalink\_ha.switch module
+===========================
+
+.. automodule:: cremalink_ha.switch
+   :members:
+   :show-inheritance:
+   :undoc-members:

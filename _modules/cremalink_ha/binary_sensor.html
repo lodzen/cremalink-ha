@@ -1,0 +1,284 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.binary_sensor &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.binary_sensor</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.binary_sensor</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Binary sensor platform for the Cremalink integration."""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.ecam.monitor_bits</span><span class="w"> </span><span class="kn">import</span> <span class="n">ALARM_BITS</span><span class="p">,</span> <span class="n">SWITCH_BITS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.binary_sensor</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BinarySensorDeviceClass</span><span class="p">,</span>
+    <span class="n">BinarySensorEntity</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">EntityCategory</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
+
+<span class="c1">#: Monitor predicates: (key, icon, device class). Names come from the entity</span>
+<span class="c1">#: translations, keyed by ``key``.</span>
+<span class="n">BINARY_SENSORS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">"is_busy"</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">BinarySensorDeviceClass</span><span class="o">.</span><span class="n">RUNNING</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">"is_idle"</span><span class="p">,</span> <span class="s2">"mdi:sleep"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">"is_watertank_open"</span><span class="p">,</span> <span class="s2">"mdi:water-boiler-alert"</span><span class="p">,</span> <span class="n">BinarySensorDeviceClass</span><span class="o">.</span><span class="n">DOOR</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">"is_watertank_empty"</span><span class="p">,</span> <span class="s2">"mdi:water-off"</span><span class="p">,</span> <span class="n">BinarySensorDeviceClass</span><span class="o">.</span><span class="n">PROBLEM</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">"is_waste_container_full"</span><span class="p">,</span> <span class="s2">"mdi:delete-alert"</span><span class="p">,</span> <span class="n">BinarySensorDeviceClass</span><span class="o">.</span><span class="n">PROBLEM</span><span class="p">),</span>
+    <span class="p">(</span>
+        <span class="s2">"is_waste_container_missing"</span><span class="p">,</span>
+        <span class="s2">"mdi:delete-alert"</span><span class="p">,</span>
+        <span class="n">BinarySensorDeviceClass</span><span class="o">.</span><span class="n">PROBLEM</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">]</span>
+
+<span class="c1">#: BINARY_SENSORS keys that stay in the normal entity section; anything</span>
+<span class="c1">#: else (Idle, every switch/alarm bit sensor) is diagnostic.</span>
+<span class="n">_PRIMARY_BINARY_KEYS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"is_busy"</span><span class="p">,</span>
+    <span class="s2">"is_watertank_open"</span><span class="p">,</span>
+    <span class="s2">"is_watertank_empty"</span><span class="p">,</span>
+    <span class="s2">"is_waste_container_full"</span><span class="p">,</span>
+    <span class="s2">"is_waste_container_missing"</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="async_setup_entry">
+<a class="viewcode-back" href="../../api/cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.async_setup_entry">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_setup_entry</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">async_add_entities</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Set up the binary sensor platform.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        hass: The Home Assistant instance.</span>
+<span class="sd">        entry: The config entry.</span>
+<span class="sd">        async_add_entities: Function to add entities.</span>
+<span class="sd">    """</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">DOMAIN</span><span class="p">][</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">]</span>
+    <span class="n">coordinator</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"coordinator"</span><span class="p">]</span>
+
+    <span class="n">entities</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">icon</span><span class="p">,</span> <span class="n">dev_class</span> <span class="ow">in</span> <span class="n">BINARY_SENSORS</span><span class="p">:</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkBinarySensor</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">icon</span><span class="p">,</span> <span class="n">dev_class</span><span class="p">))</span>
+
+    <span class="c1"># Every other documented monitor bit: motor position, clean knob, doors,</span>
+    <span class="c1"># hardware faults… Rare faults are registered but disabled by default.</span>
+    <span class="k">for</span> <span class="n">bit</span> <span class="ow">in</span> <span class="n">SWITCH_BITS</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">CremalinkBitSensor</span><span class="p">(</span>
+                <span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="s2">"switch"</span><span class="p">,</span> <span class="n">bit</span><span class="p">,</span> <span class="s2">"mdi:toggle-switch-outline"</span><span class="p">,</span> <span class="kc">None</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">for</span> <span class="n">bit</span> <span class="ow">in</span> <span class="n">ALARM_BITS</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">CremalinkBitSensor</span><span class="p">(</span>
+                <span class="n">coordinator</span><span class="p">,</span>
+                <span class="n">entry</span><span class="p">,</span>
+                <span class="s2">"alarm"</span><span class="p">,</span>
+                <span class="n">bit</span><span class="p">,</span>
+                <span class="s2">"mdi:alert-outline"</span><span class="p">,</span>
+                <span class="n">BinarySensorDeviceClass</span><span class="o">.</span><span class="n">PROBLEM</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="n">async_add_entities</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CremalinkBinarySensor">
+<a class="viewcode-back" href="../../api/cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkBinarySensor</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">,</span> <span class="n">BinarySensorEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Representation of a Cremalink binary sensor."""</span>
+
+    <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">icon</span><span class="p">,</span> <span class="n">dev_class</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Initialize the binary sensor.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            coordinator: The data update coordinator.</span>
+<span class="sd">            entry: The config entry.</span>
+<span class="sd">            key: The key to identify the sensor data (also its translation key).</span>
+<span class="sd">            icon: The icon for the sensor.</span>
+<span class="sd">            dev_class: The device class of the sensor.</span>
+<span class="sd">        """</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_key</span> <span class="o">=</span> <span class="n">key</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="n">key</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="n">icon</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_class</span> <span class="o">=</span> <span class="n">dev_class</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_entity_category</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="kc">None</span> <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_PRIMARY_BINARY_KEYS</span> <span class="k">else</span> <span class="n">EntityCategory</span><span class="o">.</span><span class="n">DIAGNOSTIC</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connection_type</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_info</span> <span class="o">=</span> <span class="n">DeviceInfo</span><span class="p">(</span>
+            <span class="n">identifiers</span><span class="o">=</span><span class="p">{(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)},</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+            <span class="n">manufacturer</span><span class="o">=</span><span class="s2">"cremalink"</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Unavailable only after the consecutive-failure threshold (T045)."""</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">consecutive_failures</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">failure_threshold</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">available</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_on</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Return True if the binary sensor is on.</span>
+
+<span class="sd">        While the machine is in a standby-like status it stops evaluating</span>
+<span class="sd">        alarm/switch bits — a latched bit (e.g. alarm bit 0 on standby</span>
+<span class="sd">        frames) must not surface as a problem. The last live reading is</span>
+<span class="sd">        retained instead (T044/FR-034).</span>
+<span class="sd">        """</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">STANDBY_STATUSES</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_key</span> <span class="o">==</span> <span class="s2">"is_busy"</span><span class="p">:</span>
+                <span class="c1"># The action byte stays latched from the last drink in</span>
+                <span class="c1"># standby — the machine is not actually busy.</span>
+                <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">return</span> <span class="n">value</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CremalinkBitSensor">
+<a class="viewcode-back" href="../../api/cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBitSensor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkBitSensor</span><span class="p">(</span><span class="n">CremalinkBinarySensor</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""One documented switch/alarm bit of the monitor frame (diagnostic)."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">bit</span><span class="p">,</span> <span class="n">icon</span><span class="p">,</span> <span class="n">dev_class</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Initialize the bit sensor.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            coordinator: The data update coordinator.</span>
+<span class="sd">            entry: The config entry.</span>
+<span class="sd">            source: ``"switch"`` or ``"alarm"``.</span>
+<span class="sd">            bit: The :class:`~cremalink.ecam.monitor_bits.BitDef`.</span>
+<span class="sd">            icon: The icon for the sensor.</span>
+<span class="sd">            dev_class: The device class of the sensor.</span>
+<span class="sd">        """</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">bit</span><span class="o">.</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">icon</span><span class="p">,</span> <span class="n">dev_class</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_source</span> <span class="o">=</span> <span class="n">source</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_bit_key</span> <span class="o">=</span> <span class="n">bit</span><span class="o">.</span><span class="n">key</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_entity_registry_enabled_default</span> <span class="o">=</span> <span class="n">bit</span><span class="o">.</span><span class="n">common</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_source</span><span class="si">}</span><span class="s2">_states"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">states</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_bit_key</span><span class="p">)</span> <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">states</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,223 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.button &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.button</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.button</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Button platform for the Cremalink integration."""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.button</span><span class="w"> </span><span class="kn">import</span> <span class="n">ButtonEntity</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistantError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BUTTON_UNAVAILABLE_STATUSES</span><span class="p">,</span>
+    <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span>
+    <span class="n">DOMAIN</span><span class="p">,</span>
+    <span class="n">NOT_BREWING_STATUSES</span><span class="p">,</span>
+    <span class="n">NOT_READY_STATUSES</span><span class="p">,</span>
+    <span class="n">TRANSLATED_COMMANDS</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="async_setup_entry">
+<a class="viewcode-back" href="../../api/cremalink_ha.button.html#cremalink_ha.button.async_setup_entry">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_setup_entry</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">async_add_entities</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Set up the button platform.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        hass: The Home Assistant instance.</span>
+<span class="sd">        entry: The config entry.</span>
+<span class="sd">        async_add_entities: Function to add entities.</span>
+<span class="sd">    """</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">DOMAIN</span><span class="p">][</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">]</span>
+    <span class="n">coordinator</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"coordinator"</span><span class="p">]</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"device"</span><span class="p">]</span>
+
+    <span class="c1"># Get available commands from the device</span>
+    <span class="n">cmds</span> <span class="o">=</span> <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">get_commands</span><span class="p">)</span>
+
+    <span class="n">entities</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">cmd</span> <span class="ow">in</span> <span class="n">cmds</span><span class="p">:</span>
+        <span class="c1"># Filter out power commands as they might be handled elsewhere</span>
+        <span class="k">if</span> <span class="n">cmd</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"wakeup"</span><span class="p">,</span> <span class="s2">"standby"</span><span class="p">,</span> <span class="s2">"refresh"</span><span class="p">]:</span>
+            <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkButton</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">entry</span><span class="p">))</span>
+    <span class="n">async_add_entities</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CremalinkButton">
+<a class="viewcode-back" href="../../api/cremalink_ha.button.html#cremalink_ha.button.CremalinkButton">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkButton</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">,</span> <span class="n">ButtonEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Representation of a Cremalink button."""</span>
+
+    <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">entry</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Initialize the button.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            coordinator: The data update coordinator.</span>
+<span class="sd">            device: The Cremalink device instance.</span>
+<span class="sd">            cmd: The command associated with this button.</span>
+<span class="sd">            entry: The config entry.</span>
+<span class="sd">        """</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cmd</span> <span class="o">=</span> <span class="n">cmd</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_title</span> <span class="o">=</span> <span class="n">cmd</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"_"</span><span class="p">,</span> <span class="s2">" "</span><span class="p">)</span><span class="o">.</span><span class="n">title</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">cmd</span> <span class="ow">in</span> <span class="n">TRANSLATED_COMMANDS</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"cmd_</span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># A command of a custom device map: no translation shipped.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_attr_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Brew </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_title</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_cmd_</span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:coffee"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connection_type</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_info</span> <span class="o">=</span> <span class="n">DeviceInfo</span><span class="p">(</span>
+            <span class="n">identifiers</span><span class="o">=</span><span class="p">{(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)},</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+            <span class="n">manufacturer</span><span class="o">=</span><span class="s2">"cremalink"</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Stop only while a brew runs; drinks unless asleep, waking or brewing.</span>
+
+<span class="sd">        The transition into standby (``going_to_sleep``) does not make any</span>
+<span class="sd">        button unavailable; standby itself does. A press during the</span>
+<span class="sd">        transition is rejected in :meth:`async_press`. ``is_busy`` (the</span>
+<span class="sd">        monitor's action byte, latched in standby) only counts as a running</span>
+<span class="sd">        brew while the status says so.</span>
+<span class="sd">        """</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">available</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># No monitor reading yet (startup): do not claim availability</span>
+            <span class="c1"># that the first real reading may withdraw seconds later.</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">brewing</span> <span class="o">=</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">NOT_BREWING_STATUSES</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">is_busy</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_title</span> <span class="o">==</span> <span class="s2">"Stop"</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">brewing</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">BUTTON_UNAVAILABLE_STATUSES</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">brewing</span>
+
+<div class="viewcode-block" id="CremalinkButton.async_press">
+<a class="viewcode-back" href="../../api/cremalink_ha.button.html#cremalink_ha.button.CremalinkButton.async_press">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_press</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Handle the button press."""</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="c1"># Stop is always sent (harmless when idle); drinks need a ready machine.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_title</span> <span class="o">!=</span> <span class="s2">"Stop"</span> <span class="ow">and</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">in</span> <span class="n">NOT_READY_STATUSES</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span><span class="s2">"The machine is not ready; turn it on first."</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">is_busy</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span><span class="s2">"The machine is busy; wait until it is ready."</span><span class="p">)</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">do</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cmd</span><span class="p">)</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">async_request_refresh</span><span class="p">()</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

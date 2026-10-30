@@ -1,0 +1,7 @@
+cremalink\_ha.sensor module
+===========================
+
+.. automodule:: cremalink_ha.sensor
+   :members:
+   :show-inheritance:
+   :undoc-members:

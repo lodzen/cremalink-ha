@@ -1,0 +1,7 @@
+cremalink\_ha.button module
+===========================
+
+.. automodule:: cremalink_ha.button
+   :members:
+   :show-inheritance:
+   :undoc-members:

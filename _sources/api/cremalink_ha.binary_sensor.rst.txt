@@ -1,0 +1,7 @@
+cremalink\_ha.binary\_sensor module
+===================================
+
+.. automodule:: cremalink_ha.binary_sensor
+   :members:
+   :show-inheritance:
+   :undoc-members:

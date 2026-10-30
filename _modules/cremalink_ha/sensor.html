@@ -1,0 +1,340 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.sensor &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.sensor</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.sensor</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Sensor platform for the Cremalink integration."""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.ecam.statistics</span><span class="w"> </span><span class="kn">import</span> <span class="n">CLOUD_COUNTER_CANDIDATES</span><span class="p">,</span> <span class="n">STAT_LABELS</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.sensor</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">SensorDeviceClass</span><span class="p">,</span>
+    <span class="n">SensorEntity</span><span class="p">,</span>
+    <span class="n">SensorStateClass</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">PERCENTAGE</span><span class="p">,</span> <span class="n">UnitOfVolume</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">CONNECTION_CLOUD</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
+
+<span class="c1">#: Monitor-value sensors: (key, icon, unit, enum_profile_key). Names come from</span>
+<span class="c1">#: the entity translations (``cremalink_&lt;key&gt;``); enum-keyed sensors also</span>
+<span class="c1">#: expose translated states (T043/FR-033).</span>
+<span class="n">MONITOR_SENSORS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="s2">"status_name"</span><span class="p">,</span> <span class="s2">"mdi:coffee-maker"</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"status"</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">"progress_percent"</span><span class="p">,</span> <span class="s2">"mdi:progress-clock"</span><span class="p">,</span> <span class="n">PERCENTAGE</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+    <span class="p">(</span><span class="s2">"accessory_name"</span><span class="p">,</span> <span class="s2">"mdi:cup"</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"accessory"</span><span class="p">),</span>
+<span class="p">]</span>
+
+<span class="c1">#: Fields suppressed while the machine is in a standby-like status — the</span>
+<span class="c1">#: machine stops evaluating them, so entities retain their last live value</span>
+<span class="c1">#: instead (T044/FR-034).</span>
+<span class="n">_STANDBY_RETAINED_KEYS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"progress_percent"</span><span class="p">,</span> <span class="s2">"accessory_name"</span><span class="p">}</span>
+
+<span class="c1">#: Cloud "counters" that are state readings, not lifetime counters.</span>
+<span class="n">_NON_COUNTER_LOGICAL</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"descale_status"</span><span class="p">,</span> <span class="s2">"water_hardness"</span><span class="p">}</span>
+
+<span class="c1">#: A2-id → unique-id suffix overrides; everything else is stat_&lt;label&gt;.</span>
+<span class="n">_STAT_SUFFIX_OVERRIDES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="mi">105</span><span class="p">:</span> <span class="s2">"stat_descales"</span><span class="p">,</span>
+    <span class="mi">106</span><span class="p">:</span> <span class="s2">"stat_water_total"</span><span class="p">,</span>
+    <span class="mi">108</span><span class="p">:</span> <span class="s2">"stat_filters"</span><span class="p">,</span>
+    <span class="mi">115</span><span class="p">:</span> <span class="s2">"stat_milk_cleans"</span><span class="p">,</span>
+    <span class="mi">43010</span><span class="p">:</span> <span class="s2">"stat_total_beverages"</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_stat_suffix</span><span class="p">(</span><span class="n">a2_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">label</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Stable unique-id suffix for a native statistics sensor."""</span>
+    <span class="k">if</span> <span class="n">a2_id</span> <span class="ow">in</span> <span class="n">_STAT_SUFFIX_OVERRIDES</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_STAT_SUFFIX_OVERRIDES</span><span class="p">[</span><span class="n">a2_id</span><span class="p">]</span>
+    <span class="k">if</span> <span class="mi">3000</span> <span class="o">&lt;=</span> <span class="n">a2_id</span> <span class="o">&lt;</span> <span class="mi">4000</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"stat_bev_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"stat_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_device_info</span><span class="p">(</span><span class="n">entry</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">DeviceInfo</span><span class="p">(</span>
+        <span class="n">identifiers</span><span class="o">=</span><span class="p">{(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)},</span>
+        <span class="n">name</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+        <span class="n">manufacturer</span><span class="o">=</span><span class="s2">"cremalink"</span><span class="p">,</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="async_setup_entry">
+<a class="viewcode-back" href="../../api/cremalink_ha.sensor.html#cremalink_ha.sensor.async_setup_entry">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_setup_entry</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">async_add_entities</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Set up the sensor platform.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        hass: The Home Assistant instance.</span>
+<span class="sd">        entry: The config entry.</span>
+<span class="sd">        async_add_entities: Function to add entities.</span>
+<span class="sd">    """</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">DOMAIN</span><span class="p">][</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">]</span>
+    <span class="n">coordinator</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"coordinator"</span><span class="p">]</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"device"</span><span class="p">]</span>
+    <span class="n">connection_type</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">)</span>
+
+    <span class="n">entities</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">enums</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"monitor_profile"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">"enums"</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">icon</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">enum_key</span> <span class="ow">in</span> <span class="n">MONITOR_SENSORS</span><span class="p">:</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">CremalinkSensor</span><span class="p">(</span>
+                <span class="n">coordinator</span><span class="p">,</span>
+                <span class="n">entry</span><span class="p">,</span>
+                <span class="n">key</span><span class="p">,</span>
+                <span class="n">icon</span><span class="p">,</span>
+                <span class="n">unit</span><span class="p">,</span>
+                <span class="n">options</span><span class="o">=</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">enums</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">enum_key</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="c1"># Statistics sensors are gated by the map's statistics_source and the</span>
+    <span class="c1"># entry's connection type (contracts/ha-entities.md): native maps are</span>
+    <span class="c1"># LAN-only, cloud_counters maps only make sense on cloud entries.</span>
+    <span class="n">statistics_source</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"statistics_source"</span><span class="p">,</span> <span class="s2">"native"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">statistics_source</span> <span class="o">==</span> <span class="s2">"native"</span> <span class="ow">and</span> <span class="n">connection_type</span> <span class="o">!=</span> <span class="n">CONNECTION_CLOUD</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">a2_id</span><span class="p">,</span> <span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">unit</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">STAT_LABELS</span><span class="o">.</span><span class="n">items</span><span class="p">()):</span>
+            <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">CremalinkStatisticSensor</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">a2_id</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">unit</span><span class="p">)</span>
+            <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">statistics_source</span> <span class="o">==</span> <span class="s2">"cloud_counters"</span> <span class="ow">and</span> <span class="n">connection_type</span> <span class="o">==</span> <span class="n">CONNECTION_CLOUD</span><span class="p">:</span>
+        <span class="c1"># Counters with no candidate datapoint on this map produce no entity.</span>
+        <span class="n">map_names</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"statistics_datapoints"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])</span>
+        <span class="k">for</span> <span class="n">logical</span><span class="p">,</span> <span class="n">candidates</span> <span class="ow">in</span> <span class="n">CLOUD_COUNTER_CANDIDATES</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">map_names</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">c</span> <span class="ow">in</span> <span class="n">map_names</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkCloudCounterSensor</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">logical</span><span class="p">))</span>
+
+    <span class="n">async_add_entities</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span></div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_CremalinkEntityBase</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Shared availability/lifecycle rules for Cremalink entities."""</span>
+
+    <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_connection_type</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_info</span> <span class="o">=</span> <span class="n">_device_info</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Unavailable only after the consecutive-failure threshold (T045)."""</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">consecutive_failures</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">failure_threshold</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">available</span>
+
+
+<div class="viewcode-block" id="CremalinkSensor">
+<a class="viewcode-back" href="../../api/cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkSensor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkSensor</span><span class="p">(</span><span class="n">_CremalinkEntityBase</span><span class="p">,</span> <span class="n">SensorEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Representation of a Cremalink monitor sensor."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">icon</span><span class="p">,</span> <span class="n">unit</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Initialize the sensor.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            coordinator: The data update coordinator.</span>
+<span class="sd">            entry: The config entry.</span>
+<span class="sd">            key: The key to identify the sensor data.</span>
+<span class="sd">            icon: The icon for the sensor.</span>
+<span class="sd">            unit: The unit of measurement for the sensor.</span>
+<span class="sd">            options: Enum state options for translated enum sensors.</span>
+<span class="sd">        """</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_key</span> <span class="o">=</span> <span class="n">key</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"cremalink_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="n">icon</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_native_unit_of_measurement</span> <span class="o">=</span> <span class="n">unit</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">options</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_class</span> <span class="o">=</span> <span class="n">SensorDeviceClass</span><span class="o">.</span><span class="n">ENUM</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_attr_options</span> <span class="o">=</span> <span class="n">options</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_machine_in_standby</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">STANDBY_STATUSES</span> <span class="k">if</span> <span class="n">status</span> <span class="k">else</span> <span class="kc">False</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Return the value of the sensor."""</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_key</span> <span class="ow">in</span> <span class="n">_STANDBY_RETAINED_KEYS</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_machine_in_standby</span><span class="p">():</span>
+            <span class="c1"># The machine stops evaluating accessory/progress in standby —</span>
+            <span class="c1"># keep the last live reading instead of reporting stale bytes.</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">return</span> <span class="n">value</span></div>
+
+
+
+<div class="viewcode-block" id="CremalinkStatisticSensor">
+<a class="viewcode-back" href="../../api/cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkStatisticSensor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkStatisticSensor</span><span class="p">(</span><span class="n">_CremalinkEntityBase</span><span class="p">,</span> <span class="n">SensorEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Native 0xA2 statistics sensor (LAN-only)."""</span>
+
+    <span class="n">_attr_state_class</span> <span class="o">=</span> <span class="n">SensorStateClass</span><span class="o">.</span><span class="n">TOTAL_INCREASING</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">a2_id</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">unit</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_a2_id</span> <span class="o">=</span> <span class="n">a2_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"stat_</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">_stat_suffix</span><span class="p">(</span><span class="n">a2_id</span><span class="p">,</span><span class="w"> </span><span class="n">label</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:counter"</span>
+        <span class="k">if</span> <span class="n">unit</span> <span class="o">==</span> <span class="s2">"l"</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_attr_native_unit_of_measurement</span> <span class="o">=</span> <span class="n">UnitOfVolume</span><span class="o">.</span><span class="n">LITERS</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:water"</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="p">,</span> <span class="s2">"statistics"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">report</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">entry</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">entries</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_a2_id</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">entry</span><span class="o">.</span><span class="n">value</span> <span class="k">if</span> <span class="n">entry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+
+
+<div class="viewcode-block" id="CremalinkCloudCounterSensor">
+<a class="viewcode-back" href="../../api/cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkCloudCounterSensor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkCloudCounterSensor</span><span class="p">(</span><span class="n">_CremalinkEntityBase</span><span class="p">,</span> <span class="n">SensorEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Cloud-counter statistics sensor backed by the Ayla datapoint cache."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">logical</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_logical</span> <span class="o">=</span> <span class="n">logical</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"stat_</span><span class="si">{</span><span class="n">logical</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_state_class</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="kc">None</span>
+            <span class="k">if</span> <span class="n">logical</span> <span class="ow">in</span> <span class="n">_NON_COUNTER_LOGICAL</span>
+            <span class="k">else</span> <span class="n">SensorStateClass</span><span class="o">.</span><span class="n">TOTAL_INCREASING</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_stat_</span><span class="si">{</span><span class="n">logical</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:counter"</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="p">,</span> <span class="s2">"statistics"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">report</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">report</span><span class="o">.</span><span class="n">cloud_counters</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_logical</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_state_attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="p">,</span> <span class="s2">"statistics"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">report</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="n">breakdown</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">breakdowns</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_logical</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">"breakdown"</span><span class="p">:</span> <span class="n">breakdown</span><span class="p">}</span> <span class="k">if</span> <span class="n">breakdown</span> <span class="k">else</span> <span class="kc">None</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

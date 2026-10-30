@@ -1,0 +1,245 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.diagnostics &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.diagnostics</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.diagnostics</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Diagnostics support for Cremalink.</span>
+
+<span class="sd">Redacts the sensitive fields introduced by cloud-assisted onboarding</span>
+<span class="sd">(spec FR-013): cloud account email/password, access/refresh tokens, and</span>
+<span class="sd">the LAN key. Modeled directly on ``delonghi_coffee``'s ``diagnostics.py``.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">base64</span><span class="w"> </span><span class="kn">import</span> <span class="n">b64decode</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.diagnostics</span><span class="w"> </span><span class="kn">import</span> <span class="n">async_redact_data</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.config_entries</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigEntry</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistant</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">DOMAIN</span>
+
+<span class="n">REDACT_KEYS</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"app_crypto_key"</span><span class="p">,</span>
+    <span class="s2">"app_iv_seed"</span><span class="p">,</span>
+    <span class="s2">"email"</span><span class="p">,</span>
+    <span class="s2">"password"</span><span class="p">,</span>
+    <span class="s2">"access_token"</span><span class="p">,</span>
+    <span class="s2">"refresh_token"</span><span class="p">,</span>
+    <span class="s2">"lan_key"</span><span class="p">,</span>
+    <span class="s2">"device_ip"</span><span class="p">,</span>
+    <span class="s2">"advertised_ip"</span><span class="p">,</span>
+    <span class="s2">"dev_crypto_key"</span><span class="p">,</span>
+    <span class="s2">"dev_iv_seed"</span><span class="p">,</span>
+    <span class="s2">"dsn"</span><span class="p">,</span>
+    <span class="s2">"command"</span><span class="p">,</span>
+    <span class="s2">"cipher"</span><span class="p">,</span>
+    <span class="s2">"decoded_prefix"</span><span class="p">,</span>
+    <span class="s2">"enc"</span><span class="p">,</span>
+    <span class="s2">"random_1"</span><span class="p">,</span>
+    <span class="s2">"random_2"</span><span class="p">,</span>
+    <span class="s2">"sign"</span><span class="p">,</span>
+    <span class="s2">"time_1"</span><span class="p">,</span>
+    <span class="s2">"time_2"</span><span class="p">,</span>
+    <span class="s2">"api_key"</span><span class="p">,</span>
+    <span class="s2">"authorization"</span><span class="p">,</span>
+    <span class="s2">"cookie"</span><span class="p">,</span>
+    <span class="s2">"credential"</span><span class="p">,</span>
+    <span class="s2">"device_key"</span><span class="p">,</span>
+    <span class="s2">"encryption_key"</span><span class="p">,</span>
+    <span class="s2">"private_key"</span><span class="p">,</span>
+    <span class="s2">"secret"</span><span class="p">,</span>
+    <span class="s2">"session_key"</span><span class="p">,</span>
+    <span class="s2">"session_token"</span><span class="p">,</span>
+    <span class="s2">"token"</span><span class="p">,</span>
+<span class="p">}</span>
+<span class="n">MAX_DIAGNOSTIC_EVENTS</span> <span class="o">=</span> <span class="mi">50</span>
+
+<span class="c1">#: Blob families carrying user-entered names (profile names ``a4f0``,</span>
+<span class="c1">#: recipe names ``aaf0``, bean-system ``baf0``). Their contents are</span>
+<span class="c1">#: elided from diagnostics; the frame header + slot indices stay.</span>
+<span class="n">USER_NAME_BLOB_FAMILIES</span> <span class="o">=</span> <span class="p">{</span><span class="sa">b</span><span class="s2">"</span><span class="se">\xa4\xf0</span><span class="s2">"</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xaa\xf0</span><span class="s2">"</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xba\xf0</span><span class="s2">"</span><span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_redact_blob_value</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Elide user-name blob contents in a single value.</span>
+
+<span class="sd">    A base64 string that decodes to a ``0xD0`` frame in a name-bearing</span>
+<span class="sd">    family is replaced by ``&lt;family&gt;/&lt;slots&gt;/**REDACTED**`` — the frame</span>
+<span class="sd">    header and profile/recipe slot indices remain for debugging.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">b64decode</span><span class="p">(</span><span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">()))</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">6</span> <span class="ow">or</span> <span class="n">raw</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!=</span> <span class="mh">0xD0</span> <span class="ow">or</span> <span class="n">raw</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">4</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">USER_NAME_BLOB_FAMILIES</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="n">family</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">hex</span><span class="p">()</span>
+    <span class="n">slots</span> <span class="o">=</span> <span class="n">raw</span><span class="p">[</span><span class="mi">4</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span><span class="o">.</span><span class="n">hex</span><span class="p">()</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">family</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">slots</span><span class="si">}</span><span class="s2">:**REDACTED**"</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_redact_blobs</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Recursively redact user-name blobs in a diagnostics structure."""</span>
+    <span class="k">if</span> <span class="n">depth</span> <span class="o">&gt;</span> <span class="mi">6</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">node</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">_redact_blobs</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">_redact_blobs</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">depth</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">node</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">_redact_blob_value</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_redact_event</span><span class="p">(</span><span class="n">event</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Redact event fields and detail keys before diagnostics export."""</span>
+    <span class="n">redacted</span> <span class="o">=</span> <span class="n">async_redact_data</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">event</span><span class="p">),</span> <span class="n">REDACT_KEYS</span><span class="p">)</span>
+    <span class="n">details</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"details"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">details</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="n">redacted</span><span class="p">[</span><span class="s2">"details"</span><span class="p">]</span> <span class="o">=</span> <span class="n">async_redact_data</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">details</span><span class="p">),</span> <span class="n">REDACT_KEYS</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_redact_blobs</span><span class="p">(</span><span class="n">redacted</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="async_get_config_entry_diagnostics">
+<a class="viewcode-back" href="../../api/cremalink_ha.diagnostics.html#cremalink_ha.diagnostics.async_get_config_entry_diagnostics">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_get_config_entry_diagnostics</span><span class="p">(</span>
+    <span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return diagnostics for a config entry, with sensitive fields redacted."""</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">coordinator</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"coordinator"</span><span class="p">)</span>
+    <span class="n">embedded_server</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"embedded_server"</span><span class="p">)</span>
+    <span class="n">coordinator_data</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="s2">"data"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">embedded_server</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">coordinator_data</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="n">embedded_server_info</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">embedded_server</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">embedded_server_info</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">"state"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">state</span><span class="p">,</span>
+            <span class="s2">"bound_port"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">bound_port</span><span class="p">,</span>
+            <span class="s2">"advertised_ip"</span><span class="p">:</span> <span class="s2">"**REDACTED**"</span> <span class="k">if</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">advertised_ip</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="s2">"monitor_poll_interval"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">monitor_poll_interval</span><span class="p">,</span>
+            <span class="s2">"nudger_poll_interval"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">nudger_poll_interval</span><span class="p">,</span>
+            <span class="s2">"session_keepalive_seconds"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">session_keepalive_seconds</span><span class="p">,</span>
+            <span class="s2">"recent_events"</span><span class="p">:</span> <span class="p">[</span>
+                <span class="n">_redact_event</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">get_recent_events</span><span class="p">()[</span>
+                    <span class="o">-</span><span class="n">MAX_DIAGNOSTIC_EVENTS</span><span class="p">:</span>
+                <span class="p">]</span>
+            <span class="p">],</span>
+        <span class="p">}</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">"entry_data"</span><span class="p">:</span> <span class="n">async_redact_data</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="p">),</span> <span class="n">REDACT_KEYS</span><span class="p">),</span>
+        <span class="s2">"entry_options"</span><span class="p">:</span> <span class="n">async_redact_data</span><span class="p">(</span><span class="nb">dict</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">options</span><span class="p">),</span> <span class="n">REDACT_KEYS</span><span class="p">),</span>
+        <span class="s2">"coordinator_data"</span><span class="p">:</span> <span class="n">async_redact_data</span><span class="p">(</span><span class="n">coordinator_data</span><span class="p">,</span> <span class="n">REDACT_KEYS</span><span class="p">),</span>
+        <span class="s2">"embedded_server"</span><span class="p">:</span> <span class="n">embedded_server_info</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

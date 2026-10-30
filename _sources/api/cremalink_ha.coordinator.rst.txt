@@ -1,0 +1,7 @@
+cremalink\_ha.coordinator module
+================================
+
+.. automodule:: cremalink_ha.coordinator
+   :members:
+   :show-inheritance:
+   :undoc-members:

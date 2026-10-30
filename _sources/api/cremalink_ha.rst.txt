@@ -1,0 +1,23 @@
+cremalink\_ha package
+=====================
+
+.. automodule:: cremalink_ha
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 4
+
+   cremalink_ha.binary_sensor
+   cremalink_ha.button
+   cremalink_ha.config_flow
+   cremalink_ha.const
+   cremalink_ha.coordinator
+   cremalink_ha.diagnostics
+   cremalink_ha.select
+   cremalink_ha.sensor
+   cremalink_ha.switch

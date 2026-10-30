@@ -1,0 +1,421 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="index.html">Module code</a></li>
+      <li class="breadcrumb-item active">cremalink_ha</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""The Cremalink Home Assistant integration."""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.config_entries</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigEntry</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">Platform</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistant</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigEntryNotReady</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">device_registry</span> <span class="k">as</span> <span class="n">dr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">entity_registry</span> <span class="k">as</span> <span class="n">er</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">issue_registry</span> <span class="k">as</span> <span class="n">ir</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">translation</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Client</span><span class="p">,</span>
+    <span class="n">EmbeddedLocalServer</span><span class="p">,</span>
+    <span class="n">create_local_device</span><span class="p">,</span>
+    <span class="n">device_map</span><span class="p">,</span>
+    <span class="n">log_event</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
+
+<span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="n">PLATFORMS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">Platform</span><span class="o">.</span><span class="n">SWITCH</span><span class="p">,</span>
+    <span class="n">Platform</span><span class="o">.</span><span class="n">BUTTON</span><span class="p">,</span>
+    <span class="n">Platform</span><span class="o">.</span><span class="n">SENSOR</span><span class="p">,</span>
+    <span class="n">Platform</span><span class="o">.</span><span class="n">BINARY_SENSOR</span><span class="p">,</span>
+    <span class="n">Platform</span><span class="o">.</span><span class="n">SELECT</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="c1">#: Belt-and-suspenders bound on top of embedded.py's own site shutdown_timeout --</span>
+<span class="c1">#: a stuck teardown must never block a reload/unload/removal indefinitely</span>
+<span class="c1">#: (research.md #7, tasks.md Phase 9).</span>
+<span class="n">EMBEDDED_SERVER_STOP_TIMEOUT</span> <span class="o">=</span> <span class="mf">10.0</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_is_docker_container</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return whether the integration appears to run in a Docker container."""</span>
+    <span class="k">return</span> <span class="n">Path</span><span class="p">(</span><span class="s2">"/.dockerenv"</span><span class="p">)</span><span class="o">.</span><span class="n">is_file</span><span class="p">()</span>
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_bounded_stop</span><span class="p">(</span><span class="n">embedded_server</span><span class="p">:</span> <span class="n">EmbeddedLocalServer</span><span class="p">,</span> <span class="n">dsn</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Stop the embedded server, never blocking the caller past the bound."""</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">async</span> <span class="k">with</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="n">EMBEDDED_SERVER_STOP_TIMEOUT</span><span class="p">):</span>
+            <span class="k">await</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">TimeoutError</span><span class="p">:</span>
+        <span class="n">embedded_server</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
+            <span class="s2">"embedded_server_stop_timeout"</span><span class="p">,</span>
+            <span class="p">{</span><span class="s2">"dsn"</span><span class="p">:</span> <span class="n">dsn</span><span class="p">,</span> <span class="s2">"timeout_seconds"</span><span class="p">:</span> <span class="n">EMBEDDED_SERVER_STOP_TIMEOUT</span><span class="p">},</span>
+            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+        <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_needs_reconfigure</span><span class="p">(</span><span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""True for local-mode entries set up before the embedded server existed.</span>
+
+<span class="sd">    Such entries were created against the (now deprecated) Supervisor</span>
+<span class="sd">    add-on and carry ``CONF_ADDON_URL`` but no embedded-mode marker; their</span>
+<span class="sd">    stored data must not be silently reused (spec: 002-embedded-local-server,</span>
+<span class="sd">    FR-004 — explicit, user-confirmed reconfiguration only).</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="n">CONF_ADDON_URL</span> <span class="ow">in</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span>
+        <span class="ow">and</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_MODE</span><span class="p">)</span> <span class="o">!=</span> <span class="n">CONNECTION_MODE_EMBEDDED</span>
+    <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_async_create_reconfigure_issue</span><span class="p">(</span><span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Flag a legacy local-mode entry as needing reconfiguration (FR-004)."""</span>
+    <span class="n">ir</span><span class="o">.</span><span class="n">async_create_issue</span><span class="p">(</span>
+        <span class="n">hass</span><span class="p">,</span>
+        <span class="n">DOMAIN</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s2">"reconfigure_</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+        <span class="n">is_fixable</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">is_persistent</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">severity</span><span class="o">=</span><span class="n">ir</span><span class="o">.</span><span class="n">IssueSeverity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+        <span class="n">translation_key</span><span class="o">=</span><span class="n">REPAIR_RECONFIGURE_REQUIRED</span><span class="p">,</span>
+        <span class="n">translation_placeholders</span><span class="o">=</span><span class="p">{</span>
+            <span class="s2">"device_name"</span><span class="p">:</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">DEVICE_NAME</span><span class="p">)</span> <span class="ow">or</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_DSN</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
+            <span class="s2">"dsn"</span><span class="p">:</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_DSN</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
+        <span class="p">},</span>
+    <span class="p">)</span>
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_clear_legacy_entity_names</span><span class="p">(</span>
+    <span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Drop stored custom names that only freeze the old English default.</span>
+
+<span class="sd">    Early versions named entities "&lt;title&gt; &lt;English name&gt;", and renaming the</span>
+<span class="sd">    device in the UI stored "&lt;device name&gt; &lt;English name&gt;" as every entity's</span>
+<span class="sd">    custom name. A stored name always beats the entity translation, so those</span>
+<span class="sd">    entities would stay English forever. Only names that are exactly</span>
+<span class="sd">    "&lt;a device name&gt; &lt;default name&gt;" (or the bare default) are cleared; a</span>
+<span class="sd">    genuine customisation never matches and stays.</span>
+<span class="sd">    """</span>
+    <span class="n">ent_reg</span> <span class="o">=</span> <span class="n">er</span><span class="o">.</span><span class="n">async_get</span><span class="p">(</span><span class="n">hass</span><span class="p">)</span>
+    <span class="n">stored</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">reg</span>
+        <span class="k">for</span> <span class="n">reg</span> <span class="ow">in</span> <span class="n">er</span><span class="o">.</span><span class="n">async_entries_for_config_entry</span><span class="p">(</span><span class="n">ent_reg</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reg</span><span class="o">.</span><span class="n">name</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">stored</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">dev_reg</span> <span class="o">=</span> <span class="n">dr</span><span class="o">.</span><span class="n">async_get</span><span class="p">(</span><span class="n">hass</span><span class="p">)</span>
+    <span class="n">english</span> <span class="o">=</span> <span class="k">await</span> <span class="n">translation</span><span class="o">.</span><span class="n">async_get_translations</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="s2">"en"</span><span class="p">,</span> <span class="s2">"entity"</span><span class="p">,</span> <span class="p">{</span><span class="n">DOMAIN</span><span class="p">})</span>
+    <span class="k">for</span> <span class="n">reg</span> <span class="ow">in</span> <span class="n">stored</span><span class="p">:</span>
+        <span class="n">device</span> <span class="o">=</span> <span class="n">dev_reg</span><span class="o">.</span><span class="n">async_get</span><span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">device_id</span><span class="p">)</span> <span class="k">if</span> <span class="n">reg</span><span class="o">.</span><span class="n">device_id</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">prefixes</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+            <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">DEVICE_NAME</span><span class="p">),</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"name_by_user"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"component.</span><span class="si">{</span><span class="n">DOMAIN</span><span class="si">}</span><span class="s2">.entity.</span><span class="si">{</span><span class="n">reg</span><span class="o">.</span><span class="n">domain</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">reg</span><span class="o">.</span><span class="n">translation_key</span><span class="si">}</span><span class="s2">.name"</span>
+        <span class="n">defaults</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">original_name</span><span class="p">,</span> <span class="n">english</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">))</span> <span class="k">if</span> <span class="n">name</span><span class="p">}</span>
+        <span class="n">legacy</span> <span class="o">=</span> <span class="n">defaults</span> <span class="o">|</span> <span class="p">{</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">prefix</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="n">prefixes</span> <span class="k">if</span> <span class="n">prefix</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">defaults</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">reg</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">legacy</span><span class="p">:</span>
+            <span class="n">ent_reg</span><span class="o">.</span><span class="n">async_update_entity</span><span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">entity_id</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+            <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s2">"Cleared the stored name </span><span class="si">%r</span><span class="s2"> of </span><span class="si">%s</span><span class="s2"> so its translated name applies"</span><span class="p">,</span>
+                <span class="n">reg</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                <span class="n">reg</span><span class="o">.</span><span class="n">entity_id</span><span class="p">,</span>
+            <span class="p">)</span>
+
+
+<div class="viewcode-block" id="async_setup_entry">
+<a class="viewcode-back" href="../api/cremalink_ha.html#cremalink_ha.async_setup_entry">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_setup_entry</span><span class="p">(</span><span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Set up Cremalink from a config entry.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        hass: The Home Assistant instance.</span>
+<span class="sd">        entry: The config entry.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        True if the setup was successful, False otherwise.</span>
+<span class="sd">    """</span>
+    <span class="n">connection_type</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">CONNECTION_LOCAL</span><span class="p">)</span>
+
+    <span class="n">dsn</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">CONF_DSN</span><span class="p">]</span>
+
+    <span class="n">map_selection</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">CONF_DEVICE_MAP</span><span class="p">]</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Resolve the device map path</span>
+        <span class="k">if</span> <span class="n">map_selection</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"custom:"</span><span class="p">):</span>
+            <span class="n">filename</span> <span class="o">=</span> <span class="n">map_selection</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">":"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">map_path</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">CUSTOM_MAP_DIR</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">map_path</span> <span class="o">=</span> <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">device_map</span><span class="p">,</span> <span class="n">map_selection</span><span class="p">)</span>
+
+    <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">log_event</span><span class="p">(</span>
+            <span class="n">_LOGGER</span><span class="p">,</span>
+            <span class="s2">"device_map_resolve_failed"</span><span class="p">,</span>
+            <span class="p">{</span><span class="s2">"device_map"</span><span class="p">:</span> <span class="n">map_selection</span><span class="p">,</span> <span class="s2">"error_type"</span><span class="p">:</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">},</span>
+            <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="n">embedded_server</span><span class="p">:</span> <span class="n">EmbeddedLocalServer</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">connection_type</span> <span class="o">==</span> <span class="n">CONNECTION_LOCAL</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">_needs_reconfigure</span><span class="p">(</span><span class="n">entry</span><span class="p">):</span>
+                <span class="n">_async_create_reconfigure_issue</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">ConfigEntryNotReady</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">dsn</span><span class="si">}</span><span class="s2"> was set up with the Cremalink Server "</span>
+                    <span class="s2">"add-on, which is no longer used. Reconfigure this device "</span>
+                    <span class="s2">"(see Settings &gt; Repairs) to switch to the built-in local "</span>
+                    <span class="s2">"server."</span>
+                <span class="p">)</span>
+
+            <span class="n">lan_key</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">CONF_LAN_KEY</span><span class="p">]</span>
+            <span class="n">device_ip</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">CONF_DEVICE_IP</span><span class="p">]</span>
+            <span class="n">advertised_ip</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="n">CONF_ADVERTISED_IP</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">advertised_ip</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">advertised_ip</span> <span class="o">=</span> <span class="n">advertised_ip</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="ow">or</span> <span class="kc">None</span>
+
+            <span class="n">embedded_server</span> <span class="o">=</span> <span class="n">EmbeddedLocalServer</span><span class="p">(</span>
+                <span class="n">dsn</span><span class="o">=</span><span class="n">dsn</span><span class="p">,</span>
+                <span class="n">device_ip</span><span class="o">=</span><span class="n">device_ip</span><span class="p">,</span>
+                <span class="n">lan_key</span><span class="o">=</span><span class="n">lan_key</span><span class="p">,</span>
+                <span class="n">device_map_path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">map_path</span><span class="p">),</span>
+                <span class="n">advertised_ip</span><span class="o">=</span><span class="n">advertised_ip</span><span class="p">,</span>
+                <span class="n">monitor_poll_interval</span><span class="o">=</span><span class="n">DEFAULT_MONITOR_POLL_INTERVAL</span><span class="p">,</span>
+                <span class="n">nudger_poll_interval</span><span class="o">=</span><span class="n">DEFAULT_NUDGER_POLL_INTERVAL</span><span class="p">,</span>
+                <span class="n">event_logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">await</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">advertised_ip</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">_is_docker_container</span><span class="p">():</span>
+                <span class="n">embedded_server</span><span class="o">.</span><span class="n">log</span><span class="p">(</span>
+                    <span class="s2">"advertised_ip_auto_detected_in_docker"</span><span class="p">,</span>
+                    <span class="p">{</span>
+                        <span class="s2">"advertised_ip"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">advertised_ip</span><span class="p">,</span>
+                        <span class="s2">"bridge_networking_may_be_unreachable"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+                    <span class="p">},</span>
+                    <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="c1"># Create the local device instance, pointed at our own</span>
+            <span class="c1"># in-process server instead of an external add-on/CLI process.</span>
+            <span class="n">device</span> <span class="o">=</span> <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+                <span class="n">partial</span><span class="p">(</span>
+                    <span class="n">create_local_device</span><span class="p">,</span>
+                    <span class="n">dsn</span><span class="o">=</span><span class="n">dsn</span><span class="p">,</span>
+                    <span class="n">server_host</span><span class="o">=</span><span class="s2">"127.0.0.1"</span><span class="p">,</span>
+                    <span class="n">server_port</span><span class="o">=</span><span class="n">embedded_server</span><span class="o">.</span><span class="n">bound_port</span><span class="p">,</span>
+                    <span class="n">device_ip</span><span class="o">=</span><span class="n">device_ip</span><span class="p">,</span>
+                    <span class="n">lan_key</span><span class="o">=</span><span class="n">lan_key</span><span class="p">,</span>
+                    <span class="n">device_map_path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">map_path</span><span class="p">),</span>
+                    <span class="n">event_logger</span><span class="o">=</span><span class="n">embedded_server</span><span class="o">.</span><span class="n">event_logger</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">connection_type</span> <span class="o">==</span> <span class="n">CONNECTION_CLOUD</span><span class="p">:</span>
+            <span class="n">token_file</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">CONF_TOKEN_FILE</span><span class="p">]</span>
+
+            <span class="k">def</span><span class="w"> </span><span class="nf">_create_cloud_device</span><span class="p">():</span>
+                <span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="n">token_file</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">client</span><span class="o">.</span><span class="n">get_device</span><span class="p">(</span><span class="n">dsn</span><span class="p">,</span> <span class="n">device_map_path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">map_path</span><span class="p">))</span>
+
+            <span class="n">device</span> <span class="o">=</span> <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">_create_cloud_device</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">ConfigEntryNotReady</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Could not find cloud device with DSN </span><span class="si">{</span><span class="n">dsn</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">log_event</span><span class="p">(</span>
+                <span class="n">_LOGGER</span><span class="p">,</span>
+                <span class="s2">"unknown_connection_type"</span><span class="p">,</span>
+                <span class="p">{</span><span class="s2">"connection_type"</span><span class="p">:</span> <span class="n">connection_type</span><span class="p">},</span>
+                <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="c1"># Configure the device</span>
+        <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">configure</span><span class="p">)</span>
+
+    <span class="k">except</span> <span class="n">ConfigEntryNotReady</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">embedded_server</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">_async_bounded_stop</span><span class="p">(</span><span class="n">embedded_server</span><span class="p">,</span> <span class="n">dsn</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="n">ConfigEntryNotReady</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Could not connect to Cremalink device: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+
+    <span class="n">coordinator</span> <span class="o">=</span> <span class="n">CremalinkCoordinator</span><span class="p">(</span>
+        <span class="n">hass</span><span class="p">,</span>
+        <span class="n">device</span><span class="p">,</span>
+        <span class="n">embedded_server</span><span class="o">=</span><span class="n">embedded_server</span><span class="p">,</span>
+        <span class="n">monitor_poll_interval</span><span class="o">=</span><span class="p">(</span>
+            <span class="n">DEFAULT_MONITOR_POLL_INTERVAL</span> <span class="k">if</span> <span class="n">embedded_server</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">embedded_server</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">entry</span><span class="o">.</span><span class="n">async_on_unload</span><span class="p">(</span><span class="n">partial</span><span class="p">(</span><span class="n">_async_bounded_stop</span><span class="p">,</span> <span class="n">embedded_server</span><span class="p">,</span> <span class="n">dsn</span><span class="p">))</span>
+
+    <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">DOMAIN</span><span class="p">][</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">"coordinator"</span><span class="p">:</span> <span class="n">coordinator</span><span class="p">,</span>
+        <span class="s2">"device"</span><span class="p">:</span> <span class="n">device</span><span class="p">,</span>
+        <span class="s2">"embedded_server"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="n">entry</span><span class="o">.</span><span class="n">async_on_unload</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">add_update_listener</span><span class="p">(</span><span class="n">_async_options_updated</span><span class="p">))</span>
+
+    <span class="k">await</span> <span class="n">_async_clear_legacy_entity_names</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">config_entries</span><span class="o">.</span><span class="n">async_forward_entry_setups</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">PLATFORMS</span><span class="p">)</span>
+    <span class="c1"># First refresh runs in the background: on a cold property store the</span>
+    <span class="c1"># monitor/settings/statistics GET sweep drains at one command per</span>
+    <span class="c1"># ~1.3 s machine poll (protocol.md §14.12), so awaiting it here would</span>
+    <span class="c1"># block Home Assistant startup by tens of seconds. Entities read as</span>
+    <span class="c1"># unavailable until the monitor lands — their `available` properties</span>
+    <span class="c1"># already model that — and the coordinator's own interval keeps</span>
+    <span class="c1"># retrying, so a machine that is offline at boot self-heals without</span>
+    <span class="c1"># a config-entry retry cycle.</span>
+    <span class="n">entry</span><span class="o">.</span><span class="n">async_create_background_task</span><span class="p">(</span>
+        <span class="n">hass</span><span class="p">,</span> <span class="n">coordinator</span><span class="o">.</span><span class="n">async_refresh</span><span class="p">(),</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">DOMAIN</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_first_refresh"</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="kc">True</span></div>
+
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_options_updated</span><span class="p">(</span><span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Reload the config entry after its local options change."""</span>
+    <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">config_entries</span><span class="o">.</span><span class="n">async_reload</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="async_unload_entry">
+<a class="viewcode-back" href="../api/cremalink_ha.html#cremalink_ha.async_unload_entry">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_unload_entry</span><span class="p">(</span><span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Unload a config entry.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        hass: The Home Assistant instance.</span>
+<span class="sd">        entry: The config entry.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        True if unload was successful.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">unload_ok</span> <span class="o">:=</span> <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">config_entries</span><span class="o">.</span><span class="n">async_unload_platforms</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">PLATFORMS</span><span class="p">):</span>
+        <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">DOMAIN</span><span class="p">]</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">unload_ok</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

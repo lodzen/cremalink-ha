@@ -1,0 +1,244 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.select module &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="cremalink_ha.sensor module" href="cremalink_ha.sensor.html" />
+    <link rel="prev" title="cremalink_ha.diagnostics module" href="cremalink_ha.diagnostics.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="cremalink_ha.html">cremalink_ha package</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.html#cremalink_ha.EMBEDDED_SERVER_STOP_TIMEOUT"><code class="docutils literal notranslate"><span class="pre">EMBEDDED_SERVER_STOP_TIMEOUT</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.html#cremalink_ha.async_setup_entry"><code class="docutils literal notranslate"><span class="pre">async_setup_entry()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.html#cremalink_ha.async_unload_entry"><code class="docutils literal notranslate"><span class="pre">async_unload_entry()</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="cremalink_ha.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.binary_sensor.html">cremalink_ha.binary_sensor module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.button.html">cremalink_ha.button module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.config_flow.html">cremalink_ha.config_flow module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.const.html">cremalink_ha.const module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.coordinator.html">cremalink_ha.coordinator module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">cremalink_ha.select module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.CremalinkProfileSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.CremalinkSettingSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSelect</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.SETTING_SELECTS"><code class="docutils literal notranslate"><span class="pre">SETTING_SELECTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.async_setup_entry"><code class="docutils literal notranslate"><span class="pre">async_setup_entry()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html">cremalink_ha.sensor module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html">cremalink_ha.switch module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">cremalink_ha</a></li>
+          <li class="breadcrumb-item"><a href="cremalink_ha.html">cremalink_ha package</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.select module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/cremalink_ha.select.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-cremalink_ha.select">
+<span id="cremalink-ha-select-module"></span><h1>cremalink_ha.select module<a class="headerlink" href="#module-cremalink_ha.select" title="Link to this heading"></a></h1>
+<p>Select platform for the Cremalink integration.</p>
+<p>Three selects per contracts/ha-entities.md:</p>
+<ul class="simple">
+<li><p>Profile picker — occupied <code class="docutils literal notranslate"><span class="pre">0xA4</span></code> slots; selection sends a session-gated
+<code class="docutils literal notranslate"><span class="pre">0xA9</span></code>; state is the last acked slot only.</p></li>
+<li><p>Auto-off + water hardness — session-gated <code class="docutils literal notranslate"><span class="pre">0x90</span></code> writes with <code class="docutils literal notranslate"><span class="pre">0x95</span></code>
+read-back; state is always a machine-confirmed option.</p></li>
+</ul>
+<dl class="py class">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">CremalinkProfileSelect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkProfileSelect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_BaseSelect</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">RestoreEntity</span></code></p>
+<p>Occupied profile slots; selection is a session-gated 0xA9 write.</p>
+<p>Non-striker machines have no current-profile read-back — the app
+itself stores the selection app-side and only ever <em>tells</em> the
+machine (<code class="docutils literal notranslate"><span class="pre">0x03EE</span></code> is the striker register; it does not track
+<code class="docutils literal notranslate"><span class="pre">0xA9</span></code> selects on Soul). <code class="docutils literal notranslate"><span class="pre">Device.refresh_current_profile</span></code>
+therefore returns the last-asserted profile; the remembered
+selection is also restored after a restart. Like the official app,
+profile selection is the one setting that is unavailable in standby.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.async_added_to_hass">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_added_to_hass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkProfileSelect.async_added_to_hass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.async_added_to_hass" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.async_refresh_state">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_refresh_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkProfileSelect.async_refresh_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.async_refresh_state" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.async_select_option">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_select_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">option</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkProfileSelect.async_select_option"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.async_select_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.available">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">available</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.available" title="Link to this definition"></a></dt>
+<dd><p>Unavailable in standby-like states — the only gated setting.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.current_option">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">current_option</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.current_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.extra_state_attributes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_state_attributes</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.extra_state_attributes" title="Link to this definition"></a></dt>
+<dd><p>The remembered profile, kept independent of the readable slots.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.options">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">options</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.options" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">CremalinkSettingSelect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkSettingSelect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_BaseSelect</span></code></p>
+<p>Writable machine setting backed by a session-gated 0x90 write.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect.async_refresh_state">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_refresh_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkSettingSelect.async_refresh_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect.async_refresh_state" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect.async_select_option">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_select_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">option</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkSettingSelect.async_select_option"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect.async_select_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect.current_option">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">current_option</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect.current_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect.options">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">options</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect.options" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="cremalink_ha.select.SETTING_SELECTS">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">SETTING_SELECTS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[('auto_off',</span> <span class="pre">'setting_auto_off'),</span> <span class="pre">('water_hardness',</span> <span class="pre">'setting_water_hardness')]</span></span><a class="headerlink" href="#cremalink_ha.select.SETTING_SELECTS" title="Link to this definition"></a></dt>
+<dd><p>(setting key, suffix). The suffix is also the
+entity translation key (name and option labels).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Setting select definitions</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="cremalink_ha.select.async_setup_entry">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">async_setup_entry</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hass</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">entry</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">async_add_entities</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#async_setup_entry"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.async_setup_entry" title="Link to this definition"></a></dt>
+<dd><p>Set up the select platform.</p>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="cremalink_ha.diagnostics.html" class="btn btn-neutral float-left" title="cremalink_ha.diagnostics module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="cremalink_ha.sensor.html" class="btn btn-neutral float-right" title="cremalink_ha.sensor module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

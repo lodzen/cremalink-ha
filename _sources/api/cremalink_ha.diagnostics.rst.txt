@@ -1,0 +1,7 @@
+cremalink\_ha.diagnostics module
+================================
+
+.. automodule:: cremalink_ha.diagnostics
+   :members:
+   :show-inheritance:
+   :undoc-members:

@@ -1,0 +1,196 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.coordinator module &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="cremalink_ha.diagnostics module" href="cremalink_ha.diagnostics.html" />
+    <link rel="prev" title="cremalink_ha.const module" href="cremalink_ha.const.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html">
+            
+              <img src="../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="cremalink_ha.html">cremalink_ha package</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.html#cremalink_ha.EMBEDDED_SERVER_STOP_TIMEOUT"><code class="docutils literal notranslate"><span class="pre">EMBEDDED_SERVER_STOP_TIMEOUT</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.html#cremalink_ha.async_setup_entry"><code class="docutils literal notranslate"><span class="pre">async_setup_entry()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.html#cremalink_ha.async_unload_entry"><code class="docutils literal notranslate"><span class="pre">async_unload_entry()</span></code></a></li>
+<li class="toctree-l2 current"><a class="reference internal" href="cremalink_ha.html#submodules">Submodules</a><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.binary_sensor.html">cremalink_ha.binary_sensor module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.button.html">cremalink_ha.button module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.config_flow.html">cremalink_ha.config_flow module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.const.html">cremalink_ha.const module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">cremalink_ha.coordinator module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.CremalinkCoordinator"><code class="docutils literal notranslate"><span class="pre">CremalinkCoordinator</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.DEFAULT_FAILURE_THRESHOLD"><code class="docutils literal notranslate"><span class="pre">DEFAULT_FAILURE_THRESHOLD</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.MONITOR_ATTEMPTS"><code class="docutils literal notranslate"><span class="pre">MONITOR_ATTEMPTS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.SETTINGS_INTERVAL"><code class="docutils literal notranslate"><span class="pre">SETTINGS_INTERVAL</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.STATISTICS_INTERVAL"><code class="docutils literal notranslate"><span class="pre">STATISTICS_INTERVAL</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html">cremalink_ha.select module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html">cremalink_ha.sensor module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html">cremalink_ha.switch module</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="modules.html">cremalink_ha</a></li>
+          <li class="breadcrumb-item"><a href="cremalink_ha.html">cremalink_ha package</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.coordinator module</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/cremalink_ha.coordinator.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-cremalink_ha.coordinator">
+<span id="cremalink-ha-coordinator-module"></span><h1>cremalink_ha.coordinator module<a class="headerlink" href="#module-cremalink_ha.coordinator" title="Link to this heading"></a></h1>
+<p>Data update coordinator for the Cremalink integration.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.CremalinkCoordinator">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.coordinator.</span></span><span class="sig-name descname"><span class="pre">CremalinkCoordinator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/coordinator.html#CremalinkCoordinator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.coordinator.CremalinkCoordinator" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">DataUpdateCoordinator</span></code></p>
+<p>Class to manage fetching data from the Cremalink device.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.CremalinkCoordinator.setting_bits">
+<span class="sig-name descname"><span class="pre">setting_bits</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/constants.html#None" title="(in Python v3.15)"><span class="pre">None</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/constants.html#None" title="(in Python v3.15)"><span class="pre">None</span></a></span><a class="headerlink" href="#cremalink_ha.coordinator.CremalinkCoordinator.setting_bits" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.CremalinkCoordinator.settings">
+<span class="sig-name descname"><span class="pre">settings</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#int" title="(in Python v3.15)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/constants.html#None" title="(in Python v3.15)"><span class="pre">None</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/constants.html#None" title="(in Python v3.15)"><span class="pre">None</span></a></span><a class="headerlink" href="#cremalink_ha.coordinator.CremalinkCoordinator.settings" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.CremalinkCoordinator.statistics_supported">
+<span class="sig-name descname"><span class="pre">statistics_supported</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/functions.html#bool" title="(in Python v3.15)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/builtins/constants.html#None" title="(in Python v3.15)"><span class="pre">None</span></a></span><a class="headerlink" href="#cremalink_ha.coordinator.CremalinkCoordinator.statistics_supported" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.DEFAULT_FAILURE_THRESHOLD">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.coordinator.</span></span><span class="sig-name descname"><span class="pre">DEFAULT_FAILURE_THRESHOLD</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">5</span></span><a class="headerlink" href="#cremalink_ha.coordinator.DEFAULT_FAILURE_THRESHOLD" title="Link to this definition"></a></dt>
+<dd><p>Consecutive failed refreshes tolerated before entities go unavailable
+(FR-035 — a single transient LAN/transport failure must not flap state).
+At the 1 s awake cadence this means ~5 s of total monitor outage.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.MONITOR_ATTEMPTS">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.coordinator.</span></span><span class="sig-name descname"><span class="pre">MONITOR_ATTEMPTS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">3</span></span><a class="headerlink" href="#cremalink_ha.coordinator.MONITOR_ATTEMPTS" title="Link to this definition"></a></dt>
+<dd><p>Monitor-fetch attempts per coordinator cycle — the machine drops or
+delays answers when busy/rate-limited (observed 2026-10-14), and one
+lost reply must not count as a refresh failure.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.SETTINGS_INTERVAL">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.coordinator.</span></span><span class="sig-name descname"><span class="pre">SETTINGS_INTERVAL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">datetime.timedelta(seconds=15)</span></span><a class="headerlink" href="#cremalink_ha.coordinator.SETTINGS_INTERVAL" title="Link to this definition"></a></dt>
+<dd><p>Settings tracking cadence. Panel-side changes republish the backing
+<code class="docutils literal notranslate"><span class="pre">dNNN</span></code> datapoint within ~6 s of a <code class="docutils literal notranslate"><span class="pre">request_property</span></code> GET
+(protocol.md §14.11); 15 s keeps HA state close to the machine without
+flooding the single-GET-per-poll command queue.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.STATISTICS_INTERVAL">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.coordinator.</span></span><span class="sig-name descname"><span class="pre">STATISTICS_INTERVAL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">datetime.timedelta(seconds=300)</span></span><a class="headerlink" href="#cremalink_ha.coordinator.STATISTICS_INTERVAL" title="Link to this definition"></a></dt>
+<dd><p>Slow-lane statistics fetch cadence (minutes-scale per spec R10 — the
+0xA2 paging session and cloud property snapshots do not need fast polls).</p>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="cremalink_ha.const.html" class="btn btn-neutral float-left" title="cremalink_ha.const module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="cremalink_ha.diagnostics.html" class="btn btn-neutral float-right" title="cremalink_ha.diagnostics module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

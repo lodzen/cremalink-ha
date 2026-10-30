@@ -1,0 +1,7 @@
+cremalink\_ha.select module
+===========================
+
+.. automodule:: cremalink_ha.select
+   :members:
+   :show-inheritance:
+   :undoc-members:

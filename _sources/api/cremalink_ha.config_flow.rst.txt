@@ -1,0 +1,7 @@
+cremalink\_ha.config\_flow module
+=================================
+
+.. automodule:: cremalink_ha.config_flow
+   :members:
+   :show-inheritance:
+   :undoc-members:
