@@ -64,7 +64,10 @@ def _make_flow(entry):
 
 @pytest.fixture(autouse=True)
 def _patch_issue_registry(monkeypatch):
-    monkeypatch.setattr(cf_mod.ir, "async_delete_issue", MagicMock())
+    # Replace the `ir` binding itself: patching an attr on the auto-created
+    # mock child is undone via delattr by pytest>=9.2, which poisons the mock
+    # (deleted names raise AttributeError on every later access).
+    monkeypatch.setattr(cf_mod, "ir", MagicMock())
     yield
 
 

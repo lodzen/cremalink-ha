@@ -267,11 +267,13 @@ class TestLifecycle:
 class TestLegacyEntryReconfigureRequired:
     def test_legacy_entry_does_not_auto_start_embedded_server(self, monkeypatch):
         created_issues = []
-        monkeypatch.setattr(
-            init_mod.ir,
-            "async_create_issue",
-            lambda hass, domain, issue_id, **kwargs: created_issues.append(issue_id),
+        ir_mock = MagicMock()
+        ir_mock.async_create_issue = (
+            lambda hass, domain, issue_id, **kwargs: created_issues.append(issue_id)
         )
+        # Patch the binding, not the shared `ir` mock child — pytest>=9.2
+        # undoes child-attr patches via delattr, poisoning the mock.
+        monkeypatch.setattr(init_mod, "ir", ir_mock)
 
         hass = _make_hass()
         legacy_data = _local_entry_data()
