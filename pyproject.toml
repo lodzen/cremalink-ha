@@ -5,7 +5,14 @@ description = "Cremalink for Home-Assistant Add-on & Integration"
 requires-python = ">=3.13.2"
 dependencies = [
     "homeassistant>=2026.2.3",
-    "cremalink-lodzen==2.0.0.dev3"
+    "cremalink-lodzen==2.0.0.dev4"
+]
+
+[dependency-groups]
+docs = [
+    "sphinx==9.1.0",
+    "sphinxcontrib-websupport==2.0.0",
+    "sphinx-rtd-theme==3.1.0"
 ]
 
 [tool.pytest.ini_options]

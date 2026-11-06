@@ -69,9 +69,15 @@ integration exposes:
   without LAN support) expose their counters on cloud entries instead.
 - **Profile select**: lists the occupied machine profiles by name;
   changing it sends a session-gated `0xA9` write — the entity only
-  shows machine-confirmed selections.
+  shows machine-confirmed selections. The machine's own selected
+  profile is also re-read on monitor cycles (param `0x03EE` — reads
+  answer even in standby), so changes made on the machine's panel show
+  up in the entity.
 - **Settings selects**: auto-off time and water hardness, writable via
   session-gated `0x90` commands with read-back confirmation.
+- **Settings switches** (device *Configuration* section): beep tone and
+  energy saving — boolean flags merged into the shared user-config
+  parameter via session-gated `0x90` writes with read-back confirmation.
 
 > **A note on writes:** machine writes are announced through a short
 > (~300 s) session, which the integration manages for you. A write can

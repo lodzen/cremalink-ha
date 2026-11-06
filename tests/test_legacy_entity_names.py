@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import custom_components.cremalink_ha as init_mod
 import pytest
@@ -47,20 +48,24 @@ def run_migration(monkeypatch):
             assert (language, category) == ("en", "entity")
             return ENGLISH
 
-        monkeypatch.setattr(init_mod.er, "async_get", lambda hass: registry)
-        monkeypatch.setattr(
-            init_mod.er,
-            "async_entries_for_config_entry",
-            lambda reg, entry_id: registry.entries,
+        # Patch the module bindings, not attrs on the shared `er`/`dr`/
+        # `translation` mock children: pytest>=9.2 undoes child-attr patches
+        # via delattr, which poisons the MagicMock (deleted names raise
+        # AttributeError on every later access across the whole session).
+        er_mock = MagicMock()
+        er_mock.async_get = lambda hass: registry
+        er_mock.async_entries_for_config_entry = (
+            lambda reg, entry_id: registry.entries
         )
-        monkeypatch.setattr(
-            init_mod.dr,
-            "async_get",
-            lambda hass: SimpleNamespace(async_get=lambda device_id: device),
+        monkeypatch.setattr(init_mod, "er", er_mock)
+        dr_mock = MagicMock()
+        dr_mock.async_get = lambda hass: SimpleNamespace(
+            async_get=lambda device_id: device
         )
-        monkeypatch.setattr(
-            init_mod.translation, "async_get_translations", _translations
-        )
+        monkeypatch.setattr(init_mod, "dr", dr_mock)
+        tr_mock = MagicMock()
+        tr_mock.async_get_translations = _translations
+        monkeypatch.setattr(init_mod, "translation", tr_mock)
         entry = SimpleNamespace(
             entry_id="e1", title="AC000W040821014", data={DEVICE_NAME: "Soul"}
         )

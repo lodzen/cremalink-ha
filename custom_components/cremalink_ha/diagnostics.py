@@ -117,7 +117,7 @@ async def async_get_config_entry_diagnostics(
             "advertised_ip": "**REDACTED**" if embedded_server.advertised_ip else None,
             "monitor_poll_interval": embedded_server.monitor_poll_interval,
             "nudger_poll_interval": embedded_server.nudger_poll_interval,
-            "rekey_interval_seconds": embedded_server.rekey_interval_seconds,
+            "session_keepalive_seconds": embedded_server.session_keepalive_seconds,
             "recent_events": [
                 _redact_event(event)
                 for event in embedded_server.get_recent_events()[

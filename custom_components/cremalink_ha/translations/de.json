@@ -3,6 +3,12 @@
     "switch": {
       "power": {
         "name": "Ein/Aus"
+      },
+      "setting_beep": {
+        "name": "Signalton"
+      },
+      "setting_energy_saving": {
+        "name": "Energiesparmodus"
       }
     },
     "select": {

@@ -168,3 +168,72 @@ class TestFailureRetention:
         coordinator.consecutive_failures = 2
         asyncio.run(coordinator._async_update_data())
         assert coordinator.consecutive_failures == 0
+
+
+class TestCurrentProfileRefresh:
+    def test_current_profile_refreshed_when_awake(self):
+        # T055: the machine's own selected profile (param 0x03EE) is
+        # re-read on monitor cycles while the machine is on.
+        calls = []
+        monitor = FakeMonitorData(status_name="ready")
+        device = make_device(
+            get_monitor=lambda: monitor,
+            refresh_current_profile=lambda: calls.append(1),
+        )
+        coordinator, _ = setup_entities(
+            FakeHass(), FakeEntry(), device, sensor_mod, monitor
+        )
+        asyncio.run(coordinator._async_update_data())
+        assert calls == [1]
+
+    def test_first_update_lands_monitor_before_slow_lanes(self):
+        # §14.12: the first cycle after (re)start returns the monitor
+        # immediately so entities go available — the profile/settings/
+        # statistics GET bursts defer to the next cycle (they drain at
+        # one command per ~1.3 s machine poll).
+        calls = []
+        settings_calls = []
+        monitor = FakeMonitorData(status_name="ready")
+        device = make_device(
+            get_monitor=lambda: monitor,
+            refresh_current_profile=lambda: calls.append(1),
+            get_settings=lambda **_: settings_calls.append(1) or {},
+        )
+        coordinator, _ = setup_entities(
+            FakeHass(), FakeEntry(), device, sensor_mod, monitor
+        )
+        coordinator._first_update_done = False
+        asyncio.run(coordinator._async_update_data())
+        assert calls == []
+        assert settings_calls == []
+        asyncio.run(coordinator._async_update_data())
+        assert calls == [1]
+        assert settings_calls == [1]
+
+    def test_current_profile_also_refreshed_in_standby(self):
+        # The machine answered 0xA2 reads while in_standby (2026-10-14
+        # log), so the profile read is attempted in standby too; the
+        # device self-throttles and keeps last-known on no answer.
+        calls = []
+        monitor = FakeMonitorData(status_name="in_standby")
+        device = make_device(
+            get_monitor=lambda: monitor,
+            refresh_current_profile=lambda: calls.append(1),
+        )
+        coordinator, _ = setup_entities(
+            FakeHass(), FakeEntry(), device, sensor_mod, monitor
+        )
+        asyncio.run(coordinator._async_update_data())
+        assert calls == [1]
+
+    def test_profile_refresh_failure_keeps_refresh_healthy(self):
+        def _boom():
+            raise OSError("lan timeout")
+
+        monitor = FakeMonitorData(status_name="ready")
+        device = make_device(get_monitor=lambda: monitor, refresh_current_profile=_boom)
+        coordinator, _ = setup_entities(
+            FakeHass(), FakeEntry(), device, sensor_mod, monitor
+        )
+        asyncio.run(coordinator._async_update_data())
+        assert coordinator.consecutive_failures == 0

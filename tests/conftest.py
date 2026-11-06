@@ -153,6 +153,10 @@ class _DataUpdateCoordinatorBase:
         self.data = await self._async_update_data()
         self.last_update_success = True
 
+    async def async_refresh(self):
+        self.data = await self._async_update_data()
+        self.last_update_success = True
+
     async def async_request_refresh(self):
         return None
 

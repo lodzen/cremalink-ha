@@ -60,7 +60,7 @@ class _FakeEmbeddedServer:
         self.advertised_ip = advertised_ip or "192.168.1.100"
         self.monitor_poll_interval = monitor_poll_interval
         self.nudger_poll_interval = nudger_poll_interval
-        self.rekey_interval_seconds = 60.0
+        self.session_keepalive_seconds = 20.0
         self.event_logger = event_logger
         self.telemetry_events = []
         self.bound_port = _FakeEmbeddedServer.next_port
@@ -99,6 +99,11 @@ class _FakeEntry:
 
     def async_on_unload(self, callback):
         self._unload_callbacks.append(callback)
+
+    def async_create_background_task(self, hass, target, name):
+        task = asyncio.get_running_loop().create_task(target, name=name)
+        self._unload_callbacks.append(task.cancel)
+        return task
 
     def add_update_listener(self, listener):
         self.update_listener = listener
@@ -172,7 +177,7 @@ class TestEmbeddedModeSetup:
         coordinator = stored["coordinator"]
         assert server.monitor_poll_interval == DEFAULT_MONITOR_POLL_INTERVAL
         assert server.nudger_poll_interval == DEFAULT_NUDGER_POLL_INTERVAL
-        assert server.rekey_interval_seconds == 60.0
+        assert server.session_keepalive_seconds == 20.0
         assert coordinator.update_interval == timedelta(
             seconds=DEFAULT_MONITOR_POLL_INTERVAL
         )
@@ -262,11 +267,13 @@ class TestLifecycle:
 class TestLegacyEntryReconfigureRequired:
     def test_legacy_entry_does_not_auto_start_embedded_server(self, monkeypatch):
         created_issues = []
-        monkeypatch.setattr(
-            init_mod.ir,
-            "async_create_issue",
-            lambda hass, domain, issue_id, **kwargs: created_issues.append(issue_id),
+        ir_mock = MagicMock()
+        ir_mock.async_create_issue = (
+            lambda hass, domain, issue_id, **kwargs: created_issues.append(issue_id)
         )
+        # Patch the binding, not the shared `ir` mock child — pytest>=9.2
+        # undoes child-attr patches via delattr, poisoning the mock.
+        monkeypatch.setattr(init_mod, "ir", ir_mock)
 
         hass = _make_hass()
         legacy_data = _local_entry_data()
