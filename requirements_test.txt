@@ -1,6 +1,6 @@
 pytest>=9.0.3
 pytest-cov>=7.1.0
-# Real Home Assistant plus the in-repo test harness from HA core
-# (packages/pytest-homeassistant), pinned to the same HA tag.
-homeassistant==2026.11.0
-pytest-homeassistant @ git+https://github.com/home-assistant/core.git@2026.11.0#subdirectory=packages/pytest-homeassistant
+# Real Home Assistant plus its in-repo test harness, published to PyPI in
+# lockstep with core — the plugin version IS the homeassistant version it
+# pins (pytest==9.0.3, respx, pytest-socket, ... come along as its deps).
+pytest-homeassistant==2026.11.0
