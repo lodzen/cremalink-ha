@@ -5,25 +5,23 @@ from custom_components.cremalink_ha import sensor as sensor_mod
 from custom_components.cremalink_ha.const import DOMAIN
 
 from tests.helpers import (
-    FakeEntry,
-    FakeHass,
     FakeMonitorData,
     make_device,
+    make_entry,
     setup_entities,
 )
 
 
-def test_two_local_entries_independent_statistics():
-    hass = FakeHass()
-    entry_a = FakeEntry(entry_id="entry_a", title="Soul A")
-    entry_b = FakeEntry(entry_id="entry_b", title="Soul B")
+async def test_two_local_entries_independent_statistics(hass):
+    entry_a = make_entry(entry_id="entry_a", title="Soul A")
+    entry_b = make_entry(entry_id="entry_b", title="Soul B")
     device_a = make_device()
     device_b = make_device()
 
-    coord_a, entities_a = setup_entities(
+    coord_a, entities_a = await setup_entities(
         hass, entry_a, device_a, sensor_mod, FakeMonitorData(status_name="ready")
     )
-    coord_b, entities_b = setup_entities(
+    coord_b, entities_b = await setup_entities(
         hass, entry_b, device_b, sensor_mod, FakeMonitorData(status_name="in_standby")
     )
 
@@ -43,18 +41,17 @@ def test_two_local_entries_independent_statistics():
     assert sensor_b.native_value is None
 
 
-def test_two_local_entries_independent_failures():
-    hass = FakeHass()
-    coord_a, entities_a = setup_entities(
+async def test_two_local_entries_independent_failures(hass):
+    coord_a, entities_a = await setup_entities(
         hass,
-        FakeEntry(entry_id="entry_a"),
+        make_entry(entry_id="entry_a"),
         make_device(),
         sensor_mod,
         FakeMonitorData(status_name="ready"),
     )
-    _coord_b, entities_b = setup_entities(
+    _coord_b, entities_b = await setup_entities(
         hass,
-        FakeEntry(entry_id="entry_b"),
+        make_entry(entry_id="entry_b"),
         make_device(),
         sensor_mod,
         FakeMonitorData(status_name="ready"),
@@ -67,18 +64,17 @@ def test_two_local_entries_independent_failures():
     assert sensor_b.available is True
 
 
-def test_two_local_entries_independent_standby_caches():
-    hass = FakeHass()
-    coord_a, entities_a = setup_entities(
+async def test_two_local_entries_independent_standby_caches(hass):
+    coord_a, entities_a = await setup_entities(
         hass,
-        FakeEntry(entry_id="entry_a"),
+        make_entry(entry_id="entry_a"),
         make_device(),
         sensor_mod,
         FakeMonitorData(status_name="ready", accessory_name="latte_crema_hot"),
     )
-    _, entities_b = setup_entities(
+    _, entities_b = await setup_entities(
         hass,
-        FakeEntry(entry_id="entry_b"),
+        make_entry(entry_id="entry_b"),
         make_device(),
         sensor_mod,
         FakeMonitorData(status_name="ready", accessory_name="none"),

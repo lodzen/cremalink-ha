@@ -18,10 +18,9 @@ from custom_components.cremalink_ha.const import (
 )
 
 from tests.helpers import (
-    FakeEntry,
-    FakeHass,
     FakeMonitorData,
     make_device,
+    make_entry,
     setup_entities,
 )
 
@@ -40,13 +39,13 @@ def _map_commands():
     return commands - POWER_COMMANDS
 
 
-def _setup(module, *, cloud=False, **dev):
+async def _setup(hass, module, *, cloud=False, entry_id="entry1", **dev):
     device = make_device(**dev)
     device.get_commands = lambda: sorted(_map_commands())
     data = {CONF_CONNECTION_TYPE: CONNECTION_CLOUD} if cloud else {}
-    _, entities = setup_entities(
-        FakeHass(),
-        FakeEntry(data=data),
+    _, entities = await setup_entities(
+        hass,
+        make_entry(entry_id=entry_id, data=data),
         device,
         module,
         FakeMonitorData(status_name="ready"),
@@ -54,23 +53,30 @@ def _setup(module, *, cloud=False, **dev):
     return entities
 
 
-def _device_configurations():
-    """One entity list per device configuration the integration can create."""
+async def _device_configurations(hass):
+    """One entity list per device configuration the integration can create.
+
+    Each configuration gets its own config entry — unique_ids embed the
+    entry_id, and reusing one would trip the registry's duplicate-ID
+    handling.
+    """
     all_cloud_datapoints = [
         name for names in CLOUD_COUNTER_CANDIDATES.values() for name in names
     ]
     return [
-        _setup(sensor_mod),
-        _setup(
+        await _setup(hass, sensor_mod, entry_id="native_sensor"),
+        await _setup(
+            hass,
             sensor_mod,
             cloud=True,
             statistics_source="cloud_counters",
             statistics_datapoints=all_cloud_datapoints,
+            entry_id="cloud_sensor",
         ),
-        _setup(bs_mod),
-        _setup(select_mod),
-        _setup(button_mod),
-        _setup(switch_mod),
+        await _setup(hass, bs_mod, entry_id="bs"),
+        await _setup(hass, select_mod, entry_id="sel"),
+        await _setup(hass, button_mod, entry_id="btn"),
+        await _setup(hass, switch_mod, entry_id="sw"),
     ]
 
 
@@ -78,18 +84,23 @@ def _entity_section(translations):
     return translations["entity"]
 
 
+def _domain(entity):
+    """The entity domain — the platform module's basename."""
+    return type(entity).__module__.rsplit(".", 1)[-1]
+
+
 class TestCoverage:
     def test_strings_and_english_translation_are_identical(self):
         assert STRINGS == EN
 
-    def test_every_entity_is_translated_to_english_and_german(self):
+    async def test_every_entity_is_translated_to_english_and_german(self, hass):
         checked = 0
-        for entities in _device_configurations():
+        for entities in await _device_configurations(hass):
             for entity in entities:
                 key = entity.translation_key
                 assert entity.has_entity_name, entity.unique_id
                 assert key, f"{entity.unique_id} has no translation key"
-                domain = entity._domain
+                domain = _domain(entity)
                 for name, translations in (("en", EN), ("de", DE)):
                     entry = _entity_section(translations)[domain].get(key)
                     assert entry and entry.get("name"), f"{name}:{domain}.{key}"
@@ -108,12 +119,12 @@ class TestCoverage:
                     == entry.get("state", {}).keys()
                 ), f"{domain}.{key} states"
 
-    def test_names_are_unique_within_one_device(self):
+    async def test_names_are_unique_within_one_device(self, hass):
         for translations in (EN, DE):
             section = _entity_section(translations)
-            for entities in _device_configurations():
+            for entities in await _device_configurations(hass):
                 names = [
-                    section[e._domain][e.translation_key]["name"] for e in entities
+                    section[_domain(e)][e.translation_key]["name"] for e in entities
                 ]
                 assert len(names) == len(set(names)), sorted(names)
 
@@ -179,24 +190,24 @@ class TestCommands:
             assert f"cmd_{command}" in _entity_section(EN)["button"]
             assert f"cmd_{command}" in _entity_section(DE)["button"]
 
-    def test_command_of_a_custom_map_keeps_a_generated_name(self):
+    async def test_command_of_a_custom_map_keeps_a_generated_name(self, hass):
         device = make_device()
         device.get_commands = lambda: ["custom_drink"]
-        _, entities = setup_entities(
-            FakeHass(),
-            FakeEntry(),
+        _, entities = await setup_entities(
+            hass,
+            make_entry(),
             device,
             button_mod,
             FakeMonitorData(status_name="ready"),
         )
         (button,) = entities
         assert button.translation_key is None
-        assert button.name == "Brew Custom Drink"
+        assert button._attr_name == "Brew Custom Drink"
 
 
 class TestStatisticsStateClass:
-    def test_state_readings_are_not_counters(self):
-        entities = _device_configurations()[1]  # cloud counters
+    async def test_state_readings_are_not_counters(self, hass):
+        entities = (await _device_configurations(hass))[1]  # cloud counters
         by_key = {e.translation_key: e for e in entities}
         assert by_key["stat_descale_status"].state_class is None
         assert by_key["stat_water_hardness"].state_class is None

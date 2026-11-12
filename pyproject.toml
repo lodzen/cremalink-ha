@@ -16,8 +16,8 @@ docs = [
 ]
 
 [tool.ty.src]
-# The test suite stubs all of `homeassistant` with MagicMocks — attributes
-# resolve as mock children, not real types, so checking it is meaningless.
+# tests/ uses duck-typed fakes (SimpleNamespace devices, FakeMonitorData)
+# that intentionally violate the real protocols — not worth annotating.
 # docs/source/conf.py is a Sphinx build script that mocks HA imports.
 exclude = ["tests", "docs"]
 
@@ -30,6 +30,12 @@ incompatible-property-override = "ignore"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Load the HA harness before setuptools plugins so its httpx2 alias
+# installs before respx's plugin module imports httpx.
+addopts = "-p pytest_homeassistant"
+asyncio_mode = "auto"
+# pytest-homeassistant resolves fixture/config dirs from these.
+ha_test_root = "tests"
 
 [tool.coverage.run]
 source = ["custom_components/cremalink_ha"]

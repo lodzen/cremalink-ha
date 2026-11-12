@@ -1,37 +1,13 @@
-"""Shared test harness for entity-level tests (fakes hass/device/entry)."""
+"""Shared test harness for entity-level tests on real Home Assistant."""
 
-import asyncio
 from types import SimpleNamespace
+
+from pytest_homeassistant.common import MockConfigEntry, MockEntityPlatform
 
 from cremalink.ecam.statistics import interpret
 from cremalink.parsing.monitor.profile import MonitorProfile
 from custom_components.cremalink_ha.const import DOMAIN
 from custom_components.cremalink_ha.coordinator import CremalinkCoordinator
-
-
-class FakeHass:
-    """Minimal hass: data store + executor job support."""
-
-    def __init__(self):
-        self.data = {DOMAIN: {}}
-        self.tasks = []
-
-    def async_create_task(self, coro):
-        """Collect scheduled coroutines; tests run them explicitly."""
-        self.tasks.append(coro)
-
-    async def async_add_executor_job(self, func, *args):
-        return await asyncio.get_running_loop().run_in_executor(None, func, *args)
-
-
-class FakeEntry:
-    """Minimal config entry."""
-
-    def __init__(self, entry_id="entry1", title="Soul", data=None, options=None):
-        self.entry_id = entry_id
-        self.title = title
-        self.data = data or {}
-        self.options = options or {}
 
 
 class FakeMonitorData:
@@ -40,8 +16,22 @@ class FakeMonitorData:
     def __init__(self, **fields):
         self.parsed = fields.get("parsed", {})
         self.raw_b64 = fields.get("raw_b64")
+        # Availability attributes the entity layer reads unconditionally.
+        self.is_busy = fields.get("is_busy", False)
         for key, value in fields.items():
             setattr(self, key, value)
+
+
+def make_entry(**overrides) -> MockConfigEntry:
+    """A Cremalink config entry carrying the given data/options."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        entry_id=overrides.get("entry_id", "entry1"),
+        title=overrides.get("title", "Soul"),
+        data=overrides.get("data", {}),
+        options=overrides.get("options", {}),
+        unique_id=overrides.get("unique_id"),
+    )
 
 
 def make_device(**overrides):
@@ -84,30 +74,42 @@ def make_coordinator(hass, device, monitor=None, **kwargs):
     if monitor is not None:
         device.get_monitor = lambda: monitor
     coordinator = CremalinkCoordinator(hass, device, **kwargs)
+    # Execute request_refresh() as an immediate task — the default 10 s
+    # debounce timer would linger past test teardown.
+    coordinator._debounced_refresh.immediate = True
+    coordinator._debounced_refresh.cooldown = 0
+    # Tests drive refresh cycles explicitly via `_async_update_data()` —
+    # a live interval would fire background refreshes mid-assertion.
+    coordinator.update_interval = None
     # Tests model a running coordinator: skip the monitor-only first
     # cycle so single `_async_update_data()` calls exercise steady state.
     coordinator._first_update_done = True
     return coordinator
 
 
-def setup_entities(hass, entry, device, platform_module, monitor=None):
-    """Run a platform's async_setup_entry; returns the entity list."""
+async def setup_entities(hass, entry, device, platform_module, monitor=None):
+    """Run a platform's async_setup_entry and attach entities for real.
+
+    Entities are added through a MockEntityPlatform so `entity.hass`,
+    `entity_id` and `async_write_ha_state` work — coordinator-update
+    handlers and state writes behave exactly as under a live entry.
+    """
     coordinator = make_coordinator(hass, device, monitor=monitor)
     coordinator.data = monitor
-    hass.data[DOMAIN][entry.entry_id] = {
+    entry.add_to_hass(hass)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "coordinator": coordinator,
         "device": device,
         "embedded_server": None,
     }
     entities = []
-
-    async def _setup():
-        await platform_module.async_setup_entry(hass, entry, entities.extend)
-        # Platform priming is backgrounded (§14.12); run the scheduled
-        # tasks as a real event loop would before entities are asserted.
-        for coro in hass.tasks:
-            await coro
-        hass.tasks.clear()
-
-    asyncio.run(_setup())
+    await platform_module.async_setup_entry(hass, entry, entities.extend)
+    platform = MockEntityPlatform(
+        hass,
+        domain=platform_module.__name__.rsplit(".", 1)[-1],
+        platform_name=DOMAIN,
+    )
+    await platform.async_add_entities(entities)
+    # Platform priming is backgrounded (§14.12); let scheduled tasks land.
+    await hass.async_block_till_done()
     return coordinator, entities

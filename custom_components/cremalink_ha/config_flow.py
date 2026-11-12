@@ -4,8 +4,17 @@ import json
 import logging
 import os
 from ipaddress import IPv4Address
+from typing import TYPE_CHECKING
 
-import voluptuous as vol
+if TYPE_CHECKING:
+    # HA types data_schema as probatio.Schema; keep the static type
+    # unambiguous so checkers don't union it with voluptuous.
+    import probatio as vol
+else:
+    try:
+        import probatio as vol
+    except ImportError:  # older HA ships only voluptuous
+        import voluptuous as vol
 from cremalink.clients.auth import authenticate_cloud
 from cremalink.devices import get_device_maps, load_device_map
 from cremalink.domain.model_detection import detect_model_id
