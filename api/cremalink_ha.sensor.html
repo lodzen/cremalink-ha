@@ -114,7 +114,10 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkCloudCounterSensor.extra_state_attributes">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_state_attributes</span></span><a class="headerlink" href="#cremalink_ha.sensor.CremalinkCloudCounterSensor.extra_state_attributes" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>Return entity specific state attributes.</p>
+<p>Implemented by platform classes. Convention for attribute names
+is lowercase snake_case.</p>
+</dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkCloudCounterSensor.native_value">
@@ -150,7 +153,7 @@
 
 <dl class="py data">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.MONITOR_SENSORS">
-<span class="sig-prename descclassname"><span class="pre">cremalink_ha.sensor.</span></span><span class="sig-name descname"><span class="pre">MONITOR_SENSORS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[('status_name',</span> <span class="pre">'mdi:coffee-maker',</span> <span class="pre">None,</span> <span class="pre">'status'),</span> <span class="pre">('progress_percent',</span> <span class="pre">'mdi:progress-clock',</span> <span class="pre">homeassistant.const.PERCENTAGE,</span> <span class="pre">None),</span> <span class="pre">('accessory_name',</span> <span class="pre">'mdi:cup',</span> <span class="pre">None,</span> <span class="pre">'accessory')]</span></span><a class="headerlink" href="#cremalink_ha.sensor.MONITOR_SENSORS" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.sensor.</span></span><span class="sig-name descname"><span class="pre">MONITOR_SENSORS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[('status_name',</span> <span class="pre">'mdi:coffee-maker',</span> <span class="pre">None,</span> <span class="pre">'status'),</span> <span class="pre">('progress_percent',</span> <span class="pre">'mdi:progress-clock',</span> <span class="pre">'%',</span> <span class="pre">None),</span> <span class="pre">('accessory_name',</span> <span class="pre">'mdi:cup',</span> <span class="pre">None,</span> <span class="pre">'accessory')]</span></span><a class="headerlink" href="#cremalink_ha.sensor.MONITOR_SENSORS" title="Link to this definition"></a></dt>
 <dd><p>(key, icon, unit, enum_profile_key). Names come from
 the entity translations (<code class="docutils literal notranslate"><span class="pre">cremalink_&lt;key&gt;</span></code>); enum-keyed sensors also
 expose translated states (T043/FR-033).</p>

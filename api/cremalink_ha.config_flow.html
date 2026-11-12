@@ -57,7 +57,13 @@
 <li class="toctree-l2 current"><a class="reference internal" href="cremalink_ha.html#submodules">Submodules</a><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.binary_sensor.html">cremalink_ha.binary_sensor module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.button.html">cremalink_ha.button module</a></li>
-<li class="toctree-l3 current"><a class="current reference internal" href="#">cremalink_ha.config_flow module</a></li>
+<li class="toctree-l3 current"><a class="current reference internal" href="#">cremalink_ha.config_flow module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.config_flow.CremalinkConfigFlow"><code class="docutils literal notranslate"><span class="pre">CremalinkConfigFlow</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.config_flow.CremalinkOptionsFlow"><code class="docutils literal notranslate"><span class="pre">CremalinkOptionsFlow</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.config_flow.get_available_maps"><code class="docutils literal notranslate"><span class="pre">get_available_maps()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.config_flow.get_map_data"><code class="docutils literal notranslate"><span class="pre">get_map_data()</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.const.html">cremalink_ha.const module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.coordinator.html">cremalink_ha.coordinator module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
@@ -96,8 +102,160 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="cremalink-ha-config-flow-module">
-<h1>cremalink_ha.config_flow module<a class="headerlink" href="#cremalink-ha-config-flow-module" title="Link to this heading"></a></h1>
+  <section id="module-cremalink_ha.config_flow">
+<span id="cremalink-ha-config-flow-module"></span><h1>cremalink_ha.config_flow module<a class="headerlink" href="#module-cremalink_ha.config_flow" title="Link to this heading"></a></h1>
+<p>Config flow for the Cremalink integration.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.config_flow.</span></span><span class="sig-name descname"><span class="pre">CremalinkConfigFlow</span></span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ConfigFlow</span></code></p>
+<p>Handle a config flow for Cremalink.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.VERSION">
+<span class="sig-name descname"><span class="pre">VERSION</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.VERSION" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_get_options_flow">
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_get_options_flow</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config_entry</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ConfigEntry</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">OptionsFlow</span></span></span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_get_options_flow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_get_options_flow" title="Link to this definition"></a></dt>
+<dd><p>Create the local advertised-IP options flow.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_choose_connection">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_choose_connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_choose_connection"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_choose_connection" title="Link to this definition"></a></dt>
+<dd><p>Re-display the local/cloud menu.</p>
+<p>Home Assistant validates that a menu’s own step_id is a real
+async_step_* method as soon as the menu is shown (it may also
+re-invoke this directly on flow resume/back-navigation) – but a
+menu <em>selection</em> always jumps straight to async_step_&lt;chosen&gt;
+(async_step_device / async_step_cloud_auth), never here.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_auth">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_cloud_auth</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_cloud_auth"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_auth" title="Link to this definition"></a></dt>
+<dd><p>Handle the cloud authentication step.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>user_input</strong> – Input data from the user.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The next step in the flow.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_device">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_cloud_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_cloud_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_device" title="Link to this definition"></a></dt>
+<dd><p>Handle the cloud device selection step.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>user_input</strong> – Input data from the user.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The created config entry or the form to show.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_device</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_device"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device" title="Link to this definition"></a></dt>
+<dd><p>Handle the local device configuration step.</p>
+<p>Collects DSN/LAN key/device IP directly; the resulting entry runs
+via the embedded local server (spec: 002-embedded-local-server) –
+no separate add-on URL is collected or stored.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>user_input</strong> – Input data from the user</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The created config entry or the form to show.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device_select">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_device_select</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_device_select"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device_select" title="Link to this definition"></a></dt>
+<dd><p>Let the user pick which discovered coffee machine to add (&gt;1 found).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_manual</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_manual"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual" title="Link to this definition"></a></dt>
+<dd><p>Handle the advanced/manual setup step (device-map picker first).</p>
+<p>This is today’s original first step, preserved verbatim for users
+without cloud account access or who prefer not to use cloud-assisted
+onboarding (FR-010).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual_map">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_manual_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_manual_map"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual_map" title="Link to this definition"></a></dt>
+<dd><p>Fallback device-map picker when automatic detection is inconclusive.</p>
+<p>Shown only when <code class="xref py py-func docutils literal notranslate"><span class="pre">detect_model_id()</span></code> returns <code class="docutils literal notranslate"><span class="pre">None</span></code> — the DSN,
+friendly name, and any LAN details are already known from the cloud
+discovery step and are not re-requested from the user.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_reconfigure">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_reconfigure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_reconfigure"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_reconfigure" title="Link to this definition"></a></dt>
+<dd><p>Switch a legacy add-on-based local entry to the embedded server.</p>
+<p>Reached via the config entry’s native “Reconfigure” action (and
+linked from the <code class="docutils literal notranslate"><span class="pre">reconfigure_required</span></code> repair issue created in
+<code class="docutils literal notranslate"><span class="pre">__init__.py</span></code>). DSN/device name/device map/LAN key/device IP are
+all already known from the existing entry and are never
+re-requested – only an optional advertised-IP override is
+collected (spec: 002-embedded-local-server, FR-004/FR-013).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_user">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_user</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkConfigFlow.async_step_user"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_user" title="Link to this definition"></a></dt>
+<dd><p>Handle the initial step: cloud login (email/password), replacing the
+previous device-map-first flow. An “advanced setup” checkbox routes to
+<a class="reference internal" href="#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual" title="cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual"><code class="xref py py-meth docutils literal notranslate"><span class="pre">async_step_manual()</span></code></a> for users without cloud account access.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkOptionsFlow">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.config_flow.</span></span><span class="sig-name descname"><span class="pre">CremalinkOptionsFlow</span></span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkOptionsFlow"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkOptionsFlow" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">OptionsFlow</span></code></p>
+<p>Configure the advertised IP for a local Cremalink entry.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.CremalinkOptionsFlow.async_step_init">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_step_init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user_input</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#CremalinkOptionsFlow.async_step_init"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.CremalinkOptionsFlow.async_step_init" title="Link to this definition"></a></dt>
+<dd><p>Show and save the optional advertised-IP override.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.get_available_maps">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.config_flow.</span></span><span class="sig-name descname"><span class="pre">get_available_maps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hass</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">HomeAssistant</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#list" title="(in Python v3.15)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#get_available_maps"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.get_available_maps" title="Link to this definition"></a></dt>
+<dd><p>Retrieve available device maps, including custom ones.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hass</strong> – The Home Assistant instance.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of available device map identifiers.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="cremalink_ha.config_flow.get_map_data">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.config_flow.</span></span><span class="sig-name descname"><span class="pre">get_map_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hass</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">HomeAssistant</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">map_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#dict" title="(in Python v3.15)"><span class="pre">dict</span></a></span></span><a class="reference internal" href="../_modules/cremalink_ha/config_flow.html#get_map_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.config_flow.get_map_data" title="Link to this definition"></a></dt>
+<dd><p>Retrieve data for a specific map.</p>
+</dd></dl>
+
 </section>
 
 

@@ -84,6 +84,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.domain.device</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.parsing.monitor.view</span><span class="w"> </span><span class="kn">import</span> <span class="n">MonitorView</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.ecam.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">SETTING_BIT_MAPS</span><span class="p">,</span> <span class="n">SETTING_OPTION_MAPS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistant</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">DataUpdateCoordinator</span><span class="p">,</span> <span class="n">UpdateFailed</span>
@@ -129,7 +130,7 @@
 
 <div class="viewcode-block" id="CremalinkCoordinator">
 <a class="viewcode-back" href="../../api/cremalink_ha.coordinator.html#cremalink_ha.coordinator.CremalinkCoordinator">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkCoordinator</span><span class="p">(</span><span class="n">DataUpdateCoordinator</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkCoordinator</span><span class="p">(</span><span class="n">DataUpdateCoordinator</span><span class="p">[</span><span class="n">MonitorView</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">"""Class to manage fetching data from the Cremalink device."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>

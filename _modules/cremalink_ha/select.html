@@ -98,6 +98,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">NOT_READY_STATUSES</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
 
 <span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -137,7 +138,7 @@
 
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">_BaseSelect</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">,</span> <span class="n">SelectEntity</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_BaseSelect</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">SelectEntity</span><span class="p">):</span>
     <span class="n">_attr_entity_category</span> <span class="o">=</span> <span class="n">EntityCategory</span><span class="o">.</span><span class="n">CONFIG</span>
     <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>
 
@@ -174,6 +175,10 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_async_refresh_after_wake</span><span class="p">())</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_asleep</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">awake</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_handle_coordinator_update</span><span class="p">()</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_refresh_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Refresh the option state; implemented by each concrete select."""</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span>
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_refresh_after_wake</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_refresh_state</span><span class="p">()</span>

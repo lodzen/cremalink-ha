@@ -1,0 +1,797 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.config_flow &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.config_flow</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.config_flow</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Config flow for the Cremalink integration."""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ipaddress</span><span class="w"> </span><span class="kn">import</span> <span class="n">IPv4Address</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="c1"># HA types data_schema as probatio.Schema; keep the static type</span>
+    <span class="c1"># unambiguous so checkers don't union it with voluptuous.</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">probatio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">vol</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">probatio</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">vol</span>
+    <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c1"># older HA ships only voluptuous</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">voluptuous</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">vol</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.clients.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">authenticate_cloud</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.devices</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_device_maps</span><span class="p">,</span> <span class="n">load_device_map</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.domain.model_detection</span><span class="w"> </span><span class="kn">import</span> <span class="n">detect_model_id</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant</span><span class="w"> </span><span class="kn">import</span> <span class="n">config_entries</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.config_entries</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigEntry</span><span class="p">,</span> <span class="n">OptionsFlow</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistant</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">issue_registry</span> <span class="k">as</span> <span class="n">ir</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink</span><span class="w"> </span><span class="kn">import</span> <span class="n">Client</span><span class="p">,</span> <span class="n">log_event</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CONF_ADDON_URL</span><span class="p">,</span>
+    <span class="n">CONF_ADVERTISED_IP</span><span class="p">,</span>
+    <span class="n">CONF_CONNECTION_MODE</span><span class="p">,</span>
+    <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span>
+    <span class="n">CONF_DEVICE_IP</span><span class="p">,</span>
+    <span class="n">CONF_DEVICE_MAP</span><span class="p">,</span>
+    <span class="n">CONF_DSN</span><span class="p">,</span>
+    <span class="n">CONF_EMAIL</span><span class="p">,</span>
+    <span class="n">CONF_LAN_KEY</span><span class="p">,</span>
+    <span class="n">CONF_MANUAL_SETUP</span><span class="p">,</span>
+    <span class="n">CONF_PASSWORD</span><span class="p">,</span>
+    <span class="n">CONF_REFRESH_TOKEN</span><span class="p">,</span>
+    <span class="n">CONF_TOKEN_FILE</span><span class="p">,</span>
+    <span class="n">CONNECTION_CLOUD</span><span class="p">,</span>
+    <span class="n">CONNECTION_LOCAL</span><span class="p">,</span>
+    <span class="n">CONNECTION_MODE_EMBEDDED</span><span class="p">,</span>
+    <span class="n">CUSTOM_MAP_DIR</span><span class="p">,</span>
+    <span class="n">DEVICE_NAME</span><span class="p">,</span>
+    <span class="n">DOMAIN</span><span class="p">,</span>
+    <span class="n">TOKEN_DIR</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_normalize_advertised_ip</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Normalize an optional IPv4 override, rejecting malformed addresses."""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">():</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">IPv4Address</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">()))</span>
+
+
+<div class="viewcode-block" id="get_available_maps">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.get_available_maps">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_available_maps</span><span class="p">(</span><span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Retrieve available device maps, including custom ones.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        hass: The Home Assistant instance.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        A list of available device map identifiers.</span>
+<span class="sd">    """</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Get built-in maps from the library</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">get_device_maps</span><span class="p">())</span>
+    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Check for custom maps in the configuration directory</span>
+    <span class="n">custom_dir</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">CUSTOM_MAP_DIR</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">custom_dir</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">listdir</span><span class="p">(</span><span class="n">custom_dir</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">f</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">".json"</span><span class="p">):</span>
+                <span class="n">maps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">"custom:</span><span class="si">{</span><span class="n">f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="n">maps</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">maps</span></div>
+
+
+
+<div class="viewcode-block" id="get_map_data">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.get_map_data">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_map_data</span><span class="p">(</span><span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">map_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Retrieve data for a specific map."""</span>
+    <span class="k">if</span> <span class="n">map_name</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"custom:"</span><span class="p">):</span>
+        <span class="n">filename</span> <span class="o">=</span> <span class="n">map_name</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">"custom:"</span><span class="p">,</span> <span class="s2">""</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">custom_dir</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">CUSTOM_MAP_DIR</span><span class="p">)</span>
+        <span class="n">filepath</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">custom_dir</span><span class="p">,</span> <span class="n">filename</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="s2">"r"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">load_device_map</span><span class="p">(</span><span class="n">map_name</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{}</span></div>
+
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkConfigFlow</span><span class="p">(</span><span class="n">config_entries</span><span class="o">.</span><span class="n">ConfigFlow</span><span class="p">,</span> <span class="n">domain</span><span class="o">=</span><span class="n">DOMAIN</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Handle a config flow for Cremalink."""</span>
+
+    <span class="n">VERSION</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">_temp_token_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_discovered_devices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">_selected_map</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="c1"># Cloud-assisted onboarding state (spec: Cloud-Assisted Device Onboarding)</span>
+    <span class="n">_cloud_token_file</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_cloud_devices</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">_cloud_selected_device</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_user">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_user">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_user</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Handle the initial step: cloud login (email/password), replacing the</span>
+<span class="sd">        previous device-map-first flow. An "advanced setup" checkbox routes to</span>
+<span class="sd">        :meth:`async_step_manual` for users without cloud account access.</span>
+<span class="sd">        """</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">user_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_MANUAL_SETUP</span><span class="p">):</span>
+                <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_step_manual</span><span class="p">()</span>
+
+            <span class="n">email</span> <span class="o">=</span> <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_EMAIL</span><span class="p">)</span>
+            <span class="n">password</span> <span class="o">=</span> <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_PASSWORD</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">email</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">password</span><span class="p">:</span>
+                <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"missing_credentials"</span>
+            <span class="k">else</span><span class="p">:</span>
+
+                <span class="k">def</span><span class="w"> </span><span class="nf">_login_and_discover</span><span class="p">():</span>
+                    <span class="n">token</span> <span class="o">=</span> <span class="n">authenticate_cloud</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">password</span><span class="p">)</span>
+                    <span class="n">token_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">TOKEN_DIR</span><span class="p">)</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                    <span class="n">temp_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="s2">"temp_token.json"</span><span class="p">)</span>
+                    <span class="n">token</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">temp_file</span><span class="p">)</span>
+                    <span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">)</span>
+                    <span class="n">raw_devices</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_devices</span><span class="p">()</span>
+                    <span class="n">coffee_devices</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">list_account_devices</span><span class="p">()</span>
+                    <span class="k">return</span> <span class="n">temp_file</span><span class="p">,</span> <span class="n">raw_devices</span><span class="p">,</span> <span class="n">coffee_devices</span>
+
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="p">(</span>
+                        <span class="n">temp_file</span><span class="p">,</span>
+                        <span class="n">raw_devices</span><span class="p">,</span>
+                        <span class="n">coffee_devices</span><span class="p">,</span>
+                    <span class="p">)</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">_login_and_discover</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="n">log_event</span><span class="p">(</span>
+                        <span class="n">_LOGGER</span><span class="p">,</span>
+                        <span class="s2">"cloud_login_failed"</span><span class="p">,</span>
+                        <span class="p">{</span><span class="s2">"error_type"</span><span class="p">:</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">},</span>
+                        <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auth_failed"</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span> <span class="o">=</span> <span class="n">temp_file</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">raw_devices</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"no_devices"</span>
+                    <span class="k">elif</span> <span class="ow">not</span> <span class="n">coffee_devices</span><span class="p">:</span>
+                        <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"no_coffee_machine"</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_devices</span> <span class="o">=</span> <span class="n">coffee_devices</span>
+                        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">coffee_devices</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_step_device_select</span><span class="p">()</span>
+                        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_async_select_cloud_device</span><span class="p">(</span><span class="n">coffee_devices</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"user"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span><span class="n">CONF_EMAIL</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span><span class="n">CONF_PASSWORD</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span><span class="n">CONF_MANUAL_SETUP</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span> <span class="nb">bool</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">),</span>
+            <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_device_select">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device_select">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_device_select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Let the user pick which discovered coffee machine to add (&gt;1 found)."""</span>
+        <span class="k">if</span> <span class="n">user_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">dsn</span> <span class="o">=</span> <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DSN</span><span class="p">]</span>
+            <span class="n">device</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_devices</span> <span class="k">if</span> <span class="n">d</span><span class="p">[</span><span class="s2">"dsn"</span><span class="p">]</span> <span class="o">==</span> <span class="n">dsn</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_async_select_cloud_device</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+        <span class="n">options</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">d</span><span class="p">[</span><span class="s2">"dsn"</span><span class="p">]:</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">d</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'product_name'</span><span class="p">)</span><span class="w"> </span><span class="ow">or</span><span class="w"> </span><span class="n">d</span><span class="p">[</span><span class="s1">'dsn'</span><span class="p">]</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">d</span><span class="p">[</span><span class="s1">'dsn'</span><span class="p">]</span><span class="si">}</span><span class="s2">)"</span>
+            <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_devices</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"device_select"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">({</span><span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DSN</span><span class="p">):</span> <span class="n">vol</span><span class="o">.</span><span class="n">In</span><span class="p">(</span><span class="n">options</span><span class="p">)}),</span>
+        <span class="p">)</span></div>
+
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_select_cloud_device</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Set the device's unique id, detect its model, and continue the flow."""</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_set_unique_id</span><span class="p">(</span><span class="n">device</span><span class="p">[</span><span class="s2">"dsn"</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_abort_if_unique_id_configured</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_selected_device</span> <span class="o">=</span> <span class="n">device</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_detect</span><span class="p">():</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>  <span class="c1"># set by the login step</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">)</span>
+            <span class="n">serial</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_serial_number</span><span class="p">(</span><span class="n">device</span><span class="p">[</span><span class="s2">"dsn"</span><span class="p">])</span>
+            <span class="k">return</span> <span class="n">detect_model_id</span><span class="p">(</span>
+                <span class="n">serial</span><span class="p">,</span>
+                <span class="p">{</span>
+                    <span class="s2">"model"</span><span class="p">:</span> <span class="n">device</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"oem_model"</span><span class="p">),</span>
+                    <span class="s2">"product_name"</span><span class="p">:</span> <span class="n">device</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"product_name"</span><span class="p">),</span>
+                <span class="p">},</span>
+                <span class="n">device</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"oem_model"</span><span class="p">),</span>
+            <span class="p">)</span>
+
+        <span class="n">model_id</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">_detect</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">model_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_step_manual_map</span><span class="p">()</span>
+        <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_async_complete_cloud_entry</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="n">model_id</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_manual_map">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual_map">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_manual_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Fallback device-map picker when automatic detection is inconclusive.</span>
+
+<span class="sd">        Shown only when :func:`detect_model_id` returns ``None`` — the DSN,</span>
+<span class="sd">        friendly name, and any LAN details are already known from the cloud</span>
+<span class="sd">        discovery step and are not re-requested from the user.</span>
+<span class="sd">        """</span>
+        <span class="n">device</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_selected_device</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">user_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_async_complete_cloud_entry</span><span class="p">(</span>
+                <span class="n">device</span><span class="p">,</span> <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DEVICE_MAP</span><span class="p">]</span>
+            <span class="p">)</span>
+
+        <span class="n">maps</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">get_available_maps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"manual_map"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DEVICE_MAP</span><span class="p">):</span> <span class="n">vol</span><span class="o">.</span><span class="n">In</span><span class="p">(</span><span class="n">maps</span><span class="p">)</span> <span class="k">if</span> <span class="n">maps</span> <span class="k">else</span> <span class="nb">str</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">),</span>
+            <span class="n">description_placeholders</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">"dsn"</span><span class="p">:</span> <span class="n">device</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dsn"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
+                <span class="s2">"device_name"</span><span class="p">:</span> <span class="n">device</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"product_name"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">device</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"dsn"</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
+            <span class="p">},</span>
+        <span class="p">)</span></div>
+
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_complete_cloud_entry</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">device_map_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Fetch LAN details and create the entry as local (if supported and</span>
+<span class="sd">        available) or cloud (fallback), per FR-006/FR-007/FR-008.</span>
+<span class="sd">        """</span>
+        <span class="n">dsn</span> <span class="o">=</span> <span class="n">device</span><span class="p">[</span><span class="s2">"dsn"</span><span class="p">]</span>
+        <span class="n">device_name</span> <span class="o">=</span> <span class="n">device</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"product_name"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">dsn</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_fetch_lan</span><span class="p">():</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>  <span class="c1"># set by the login step</span>
+            <span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">client</span><span class="o">.</span><span class="n">get_lan_config</span><span class="p">(</span><span class="n">dsn</span><span class="p">)</span>
+
+        <span class="n">map_data</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+            <span class="n">get_map_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">,</span> <span class="n">device_map_id</span>
+        <span class="p">)</span>
+        <span class="n">support</span> <span class="o">=</span> <span class="n">map_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"support"</span><span class="p">,</span> <span class="p">{})</span>
+
+        <span class="n">lan</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"lan_enabled"</span><span class="p">:</span> <span class="kc">False</span><span class="p">}</span>
+        <span class="k">if</span> <span class="n">support</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"local"</span><span class="p">):</span>
+            <span class="n">lan</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">_fetch_lan</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="n">lan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"lan_enabled"</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">lan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"lan_ip"</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">lan</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"lanip_key"</span><span class="p">)</span>
+            <span class="ow">and</span> <span class="n">support</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"local"</span><span class="p">)</span>
+        <span class="p">):</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">CONF_CONNECTION_TYPE</span><span class="p">:</span> <span class="n">CONNECTION_LOCAL</span><span class="p">,</span>
+                <span class="n">DEVICE_NAME</span><span class="p">:</span> <span class="n">device_name</span><span class="p">,</span>
+                <span class="n">CONF_DSN</span><span class="p">:</span> <span class="n">dsn</span><span class="p">,</span>
+                <span class="n">CONF_DEVICE_MAP</span><span class="p">:</span> <span class="n">device_map_id</span><span class="p">,</span>
+                <span class="n">CONF_CONNECTION_MODE</span><span class="p">:</span> <span class="n">CONNECTION_MODE_EMBEDDED</span><span class="p">,</span>
+                <span class="n">CONF_LAN_KEY</span><span class="p">:</span> <span class="n">lan</span><span class="p">[</span><span class="s2">"lanip_key"</span><span class="p">],</span>
+                <span class="n">CONF_DEVICE_IP</span><span class="p">:</span> <span class="n">lan</span><span class="p">[</span><span class="s2">"lan_ip"</span><span class="p">],</span>
+            <span class="p">}</span>
+            <span class="c1"># Local connection doesn't need the cloud refresh token — discard it.</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">token_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">TOKEN_DIR</span><span class="p">)</span>
+            <span class="n">final_token_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dsn</span><span class="si">}</span><span class="s2">.json"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">,</span> <span class="n">final_token_path</span><span class="p">)</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">CONF_CONNECTION_TYPE</span><span class="p">:</span> <span class="n">CONNECTION_CLOUD</span><span class="p">,</span>
+                <span class="n">DEVICE_NAME</span><span class="p">:</span> <span class="n">device_name</span><span class="p">,</span>
+                <span class="n">CONF_DSN</span><span class="p">:</span> <span class="n">dsn</span><span class="p">,</span>
+                <span class="n">CONF_DEVICE_MAP</span><span class="p">:</span> <span class="n">device_map_id</span><span class="p">,</span>
+                <span class="n">CONF_TOKEN_FILE</span><span class="p">:</span> <span class="n">final_token_path</span><span class="p">,</span>
+            <span class="p">}</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_create_entry</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="n">device_name</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_manual">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_manual</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Handle the advanced/manual setup step (device-map picker first).</span>
+
+<span class="sd">        This is today's original first step, preserved verbatim for users</span>
+<span class="sd">        without cloud account access or who prefer not to use cloud-assisted</span>
+<span class="sd">        onboarding (FR-010).</span>
+<span class="sd">        """</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">user_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span> <span class="o">=</span> <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DEVICE_MAP</span><span class="p">]</span>
+
+            <span class="c1"># Check support</span>
+            <span class="n">map_data</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+                <span class="n">get_map_data</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span>
+            <span class="p">)</span>
+            <span class="n">support</span> <span class="o">=</span> <span class="n">map_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"support"</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">local_support</span> <span class="o">=</span> <span class="n">support</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"local"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+            <span class="n">cloud_support</span> <span class="o">=</span> <span class="n">support</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"cloud"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">local_support</span> <span class="ow">and</span> <span class="n">cloud_support</span><span class="p">:</span>
+                <span class="c1"># Keys must be real async_step_* method names -- Home</span>
+                <span class="c1"># Assistant's menu handling jumps straight to</span>
+                <span class="c1"># async_step_&lt;next_step_id&gt;, it never calls back into the</span>
+                <span class="c1"># step that showed the menu.</span>
+                <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_step_choose_connection</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="n">local_support</span><span class="p">:</span>
+                <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_step_device</span><span class="p">()</span>
+            <span class="k">elif</span> <span class="n">cloud_support</span><span class="p">:</span>
+                <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_step_cloud_auth</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"no_support"</span>
+
+        <span class="n">maps</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">get_available_maps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"manual"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">({</span><span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DEVICE_MAP</span><span class="p">):</span> <span class="n">vol</span><span class="o">.</span><span class="n">In</span><span class="p">(</span><span class="n">maps</span><span class="p">)}),</span>
+            <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_choose_connection">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_choose_connection">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_choose_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Re-display the local/cloud menu.</span>
+
+<span class="sd">        Home Assistant validates that a menu's own step_id is a real</span>
+<span class="sd">        async_step_* method as soon as the menu is shown (it may also</span>
+<span class="sd">        re-invoke this directly on flow resume/back-navigation) -- but a</span>
+<span class="sd">        menu *selection* always jumps straight to async_step_&lt;chosen&gt;</span>
+<span class="sd">        (async_step_device / async_step_cloud_auth), never here.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_menu</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"choose_connection"</span><span class="p">,</span>
+            <span class="n">menu_options</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">"device"</span><span class="p">:</span> <span class="s2">"Local Network [recommended]"</span><span class="p">,</span>
+                <span class="s2">"cloud_auth"</span><span class="p">:</span> <span class="s2">"Cloud (Ayla Networks)"</span><span class="p">,</span>
+            <span class="p">},</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_device">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_device</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Handle the local device configuration step.</span>
+
+<span class="sd">        Collects DSN/LAN key/device IP directly; the resulting entry runs</span>
+<span class="sd">        via the embedded local server (spec: 002-embedded-local-server) --</span>
+<span class="sd">        no separate add-on URL is collected or stored.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            user_input: Input data from the user</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            The created config entry or the form to show.</span>
+<span class="sd">        """</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">get_available_maps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">)</span>
+        <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">DEVICE_NAME</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DSN</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_LAN_KEY</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DEVICE_IP</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span><span class="p">:</span>
+            <span class="n">schema</span><span class="p">[</span><span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DEVICE_MAP</span><span class="p">)]</span> <span class="o">=</span> <span class="n">vol</span><span class="o">.</span><span class="n">In</span><span class="p">(</span><span class="n">maps</span><span class="p">)</span> <span class="k">if</span> <span class="n">maps</span> <span class="k">else</span> <span class="nb">str</span>
+
+        <span class="k">if</span> <span class="n">user_input</span><span class="p">:</span>
+            <span class="n">raw_advertised_ip</span> <span class="o">=</span> <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">raw_advertised_ip</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">]</span> <span class="o">=</span> <span class="n">_normalize_advertised_ip</span><span class="p">(</span>
+                        <span class="n">raw_advertised_ip</span>
+                    <span class="p">)</span>
+                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"invalid_advertised_ip"</span>
+
+            <span class="k">if</span> <span class="n">errors</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+                    <span class="n">step_id</span><span class="o">=</span><span class="s2">"device"</span><span class="p">,</span>
+                    <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span><span class="n">schema</span><span class="p">),</span>
+                    <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+                <span class="p">)</span>
+
+            <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">]</span> <span class="o">=</span> <span class="n">CONNECTION_LOCAL</span>
+            <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_CONNECTION_MODE</span><span class="p">]</span> <span class="o">=</span> <span class="n">CONNECTION_MODE_EMBEDDED</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span> <span class="ow">and</span> <span class="n">CONF_DEVICE_MAP</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">user_input</span><span class="p">:</span>
+                <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DEVICE_MAP</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span>
+
+            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_set_unique_id</span><span class="p">(</span><span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DSN</span><span class="p">])</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_abort_if_unique_id_configured</span><span class="p">()</span>
+
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_create_entry</span><span class="p">(</span>
+                <span class="n">title</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">user_input</span><span class="p">[</span><span class="n">DEVICE_NAME</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">user_input</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"device"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span><span class="n">schema</span><span class="p">),</span>
+            <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_cloud_auth">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_auth">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_cloud_auth</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Handle the cloud authentication step.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            user_input: Input data from the user.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The next step in the flow.</span>
+<span class="sd">        """</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">user_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">refresh_token</span> <span class="o">=</span> <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_REFRESH_TOKEN</span><span class="p">]</span>
+
+            <span class="c1"># Ensure token directory exists</span>
+            <span class="n">token_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">TOKEN_DIR</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+            <span class="c1"># Create a temporary token file</span>
+            <span class="n">temp_file</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="s2">"temp_token.json"</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>
+
+                <span class="k">def</span><span class="w"> </span><span class="nf">_auth_and_fetch</span><span class="p">():</span>
+                    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="s2">"w"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                        <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">({</span><span class="s2">"refresh_token"</span><span class="p">:</span> <span class="n">refresh_token</span><span class="p">},</span> <span class="n">f</span><span class="p">)</span>
+
+                    <span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">)</span>
+                    <span class="k">return</span> <span class="n">client</span><span class="o">.</span><span class="n">get_devices</span><span class="p">()</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">_discovered_devices</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+                    <span class="n">_auth_and_fetch</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_temp_token_file</span> <span class="o">=</span> <span class="n">temp_file</span>
+
+                <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_discovered_devices</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"no_devices"</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_step_cloud_device</span><span class="p">()</span>
+
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">log_event</span><span class="p">(</span>
+                    <span class="n">_LOGGER</span><span class="p">,</span>
+                    <span class="s2">"cloud_authentication_failed"</span><span class="p">,</span>
+                    <span class="p">{</span><span class="s2">"error_type"</span><span class="p">:</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">},</span>
+                    <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auth_failed"</span>
+                <span class="c1"># Clean up if failed</span>
+                <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">temp_file</span><span class="p">):</span>
+                    <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">temp_file</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"cloud_auth"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_REFRESH_TOKEN</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">),</span>
+            <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_cloud_device">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_device">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_cloud_device</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Handle the cloud device selection step.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            user_input: Input data from the user.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            The created config entry or the form to show.</span>
+<span class="sd">        """</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">maps</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">get_available_maps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">user_input</span><span class="p">:</span>
+            <span class="n">dsn</span> <span class="o">=</span> <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DSN</span><span class="p">]</span>
+
+            <span class="c1"># Check if already configured</span>
+            <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_set_unique_id</span><span class="p">(</span><span class="n">dsn</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_abort_if_unique_id_configured</span><span class="p">()</span>
+
+            <span class="c1"># Move temp token file to permanent location</span>
+            <span class="n">token_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">TOKEN_DIR</span><span class="p">)</span>
+            <span class="n">final_token_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dsn</span><span class="si">}</span><span class="s2">.json"</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_temp_token_file</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_temp_token_file</span><span class="p">):</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_temp_token_file</span><span class="p">,</span> <span class="n">final_token_path</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span> <span class="ow">and</span> <span class="n">CONF_DEVICE_MAP</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">user_input</span><span class="p">:</span>
+                <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DEVICE_MAP</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span>
+
+            <span class="n">data</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="n">CONF_CONNECTION_TYPE</span><span class="p">:</span> <span class="n">CONNECTION_CLOUD</span><span class="p">,</span>
+                <span class="n">DEVICE_NAME</span><span class="p">:</span> <span class="n">dsn</span><span class="p">,</span>  <span class="c1"># Default name, user can change later in HA entity settings</span>
+                <span class="n">CONF_DSN</span><span class="p">:</span> <span class="n">dsn</span><span class="p">,</span>
+                <span class="n">CONF_DEVICE_MAP</span><span class="p">:</span> <span class="n">user_input</span><span class="p">[</span><span class="n">CONF_DEVICE_MAP</span><span class="p">],</span>
+                <span class="n">CONF_TOKEN_FILE</span><span class="p">:</span> <span class="n">final_token_path</span><span class="p">,</span>
+            <span class="p">}</span>
+
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_create_entry</span><span class="p">(</span><span class="n">title</span><span class="o">=</span><span class="n">dsn</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">)</span>
+
+        <span class="n">schema</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">DEVICE_NAME</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+            <span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DSN</span><span class="p">):</span> <span class="n">vol</span><span class="o">.</span><span class="n">In</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_discovered_devices</span><span class="p">),</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_map</span><span class="p">:</span>
+            <span class="n">schema</span><span class="p">[</span><span class="n">vol</span><span class="o">.</span><span class="n">Required</span><span class="p">(</span><span class="n">CONF_DEVICE_MAP</span><span class="p">)]</span> <span class="o">=</span> <span class="n">vol</span><span class="o">.</span><span class="n">In</span><span class="p">(</span><span class="n">maps</span><span class="p">)</span> <span class="k">if</span> <span class="n">maps</span> <span class="k">else</span> <span class="nb">str</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"cloud_device"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span><span class="n">schema</span><span class="p">),</span>
+            <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_step_reconfigure">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_reconfigure">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_reconfigure</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Switch a legacy add-on-based local entry to the embedded server.</span>
+
+<span class="sd">        Reached via the config entry's native "Reconfigure" action (and</span>
+<span class="sd">        linked from the ``reconfigure_required`` repair issue created in</span>
+<span class="sd">        ``__init__.py``). DSN/device name/device map/LAN key/device IP are</span>
+<span class="sd">        all already known from the existing entry and are never</span>
+<span class="sd">        re-requested -- only an optional advertised-IP override is</span>
+<span class="sd">        collected (spec: 002-embedded-local-server, FR-004/FR-013).</span>
+<span class="sd">        """</span>
+        <span class="n">entry_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="s2">"entry_id"</span><span class="p">]</span>
+        <span class="n">entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config_entries</span><span class="o">.</span><span class="n">async_get_entry</span><span class="p">(</span><span class="n">entry_id</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">entry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_abort</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="s2">"reconfigure_entry_missing"</span><span class="p">)</span>
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">if</span> <span class="n">user_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">new_data</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+            <span class="n">new_data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">CONF_ADDON_URL</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">new_data</span><span class="p">[</span><span class="n">CONF_CONNECTION_MODE</span><span class="p">]</span> <span class="o">=</span> <span class="n">CONNECTION_MODE_EMBEDDED</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">advertised_ip</span> <span class="o">=</span> <span class="n">_normalize_advertised_ip</span><span class="p">(</span>
+                    <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">)</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"invalid_advertised_ip"</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">advertised_ip</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">new_data</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">new_data</span><span class="p">[</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">]</span> <span class="o">=</span> <span class="n">advertised_ip</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config_entries</span><span class="o">.</span><span class="n">async_update_entry</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">new_data</span><span class="p">)</span>
+                <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config_entries</span><span class="o">.</span><span class="n">async_reload</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)</span>
+                <span class="n">ir</span><span class="o">.</span><span class="n">async_delete_issue</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"reconfigure_</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">"</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_abort</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="s2">"reconfigure_successful"</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"reconfigure"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">({</span><span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">):</span> <span class="nb">str</span><span class="p">}),</span>
+            <span class="n">description_placeholders</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">"device_name"</span><span class="p">:</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">DEVICE_NAME</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_DSN</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
+                <span class="s2">"dsn"</span><span class="p">:</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_DSN</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
+            <span class="p">},</span>
+            <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="CremalinkConfigFlow.async_get_options_flow">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_get_options_flow">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">async_get_options_flow</span><span class="p">(</span><span class="n">config_entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">OptionsFlow</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create the local advertised-IP options flow."""</span>
+        <span class="k">return</span> <span class="n">CremalinkOptionsFlow</span><span class="p">()</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CremalinkOptionsFlow">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkOptionsFlow">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkOptionsFlow</span><span class="p">(</span><span class="n">OptionsFlow</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Configure the advertised IP for a local Cremalink entry."""</span>
+
+<div class="viewcode-block" id="CremalinkOptionsFlow.async_step_init">
+<a class="viewcode-back" href="../../api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkOptionsFlow.async_step_init">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_step_init</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user_input</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Show and save the optional advertised-IP override."""</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">CONNECTION_LOCAL</span><span class="p">)</span>
+            <span class="o">!=</span> <span class="n">CONNECTION_LOCAL</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_abort</span><span class="p">(</span><span class="n">reason</span><span class="o">=</span><span class="s2">"local_only"</span><span class="p">)</span>
+
+        <span class="n">errors</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">user_input</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">raw_advertised_ip</span> <span class="o">=</span> <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">advertised_ip</span> <span class="o">=</span> <span class="n">_normalize_advertised_ip</span><span class="p">(</span><span class="n">raw_advertised_ip</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">advertised_ip</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"invalid_advertised_ip"</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span><span class="p">:</span>
+                <span class="n">options</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">if</span> <span class="n">CONF_ADVERTISED_IP</span> <span class="ow">in</span> <span class="n">user_input</span><span class="p">:</span>
+                    <span class="n">options</span><span class="p">[</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">]</span> <span class="o">=</span> <span class="n">advertised_ip</span>
+                <span class="k">elif</span> <span class="n">CONF_ADVERTISED_IP</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
+                    <span class="n">options</span><span class="p">[</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">options</span><span class="p">[</span>
+                        <span class="n">CONF_ADVERTISED_IP</span>
+                    <span class="p">]</span>
+                <span class="k">elif</span> <span class="n">CONF_ADVERTISED_IP</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">data</span><span class="p">:</span>
+                    <span class="n">options</span><span class="p">[</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span>
+                        <span class="n">CONF_ADVERTISED_IP</span>
+                    <span class="p">]</span>
+                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_create_entry</span><span class="p">(</span>
+                    <span class="n">title</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+                    <span class="n">data</span><span class="o">=</span><span class="n">options</span><span class="p">,</span>
+                <span class="p">)</span>
+
+        <span class="n">current_advertised_ip</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+                <span class="n">CONF_ADVERTISED_IP</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">,</span> <span class="s2">""</span><span class="p">),</span>
+            <span class="p">)</span>
+            <span class="ow">or</span> <span class="s2">""</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_show_form</span><span class="p">(</span>
+            <span class="n">step_id</span><span class="o">=</span><span class="s2">"init"</span><span class="p">,</span>
+            <span class="n">data_schema</span><span class="o">=</span><span class="n">vol</span><span class="o">.</span><span class="n">Schema</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span>
+                        <span class="n">CONF_ADVERTISED_IP</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">current_advertised_ip</span>
+                    <span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">),</span>
+            <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

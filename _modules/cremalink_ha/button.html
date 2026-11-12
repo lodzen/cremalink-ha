@@ -91,6 +91,7 @@
     <span class="n">NOT_READY_STATUSES</span><span class="p">,</span>
     <span class="n">TRANSLATED_COMMANDS</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
 
 
 <div class="viewcode-block" id="async_setup_entry">
@@ -121,7 +122,7 @@
 
 <div class="viewcode-block" id="CremalinkButton">
 <a class="viewcode-back" href="../../api/cremalink_ha.button.html#cremalink_ha.button.CremalinkButton">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkButton</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">,</span> <span class="n">ButtonEntity</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkButton</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">ButtonEntity</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Representation of a Cremalink button."""</span>
 
     <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>

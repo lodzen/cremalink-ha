@@ -82,6 +82,7 @@
  | <a href="#C"><strong>C</strong></a>
  | <a href="#D"><strong>D</strong></a>
  | <a href="#E"><strong>E</strong></a>
+ | <a href="#G"><strong>G</strong></a>
  | <a href="#I"><strong>I</strong></a>
  | <a href="#M"><strong>M</strong></a>
  | <a href="#N"><strong>N</strong></a>
@@ -89,6 +90,7 @@
  | <a href="#S"><strong>S</strong></a>
  | <a href="#T"><strong>T</strong></a>
  | <a href="#U"><strong>U</strong></a>
+ | <a href="#V"><strong>V</strong></a>
  
 </div>
 <h2 id="A">A</h2>
@@ -97,6 +99,8 @@
       <li><a href="api/cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.async_added_to_hass">async_added_to_hass() (cremalink_ha.select.CremalinkProfileSelect method)</a>
 </li>
       <li><a href="api/cremalink_ha.diagnostics.html#cremalink_ha.diagnostics.async_get_config_entry_diagnostics">async_get_config_entry_diagnostics() (in module cremalink_ha.diagnostics)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_get_options_flow">async_get_options_flow() (cremalink_ha.config_flow.CremalinkConfigFlow static method)</a>
 </li>
       <li><a href="api/cremalink_ha.button.html#cremalink_ha.button.CremalinkButton.async_press">async_press() (cremalink_ha.button.CremalinkButton method)</a>
 </li>
@@ -128,8 +132,28 @@
         <li><a href="api/cremalink_ha.switch.html#cremalink_ha.switch.async_setup_entry">(in module cremalink_ha.switch)</a>
 </li>
       </ul></li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_choose_connection">async_step_choose_connection() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_auth">async_step_cloud_auth() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_cloud_device">async_step_cloud_device() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device">async_step_device() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_device_select">async_step_device_select() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkOptionsFlow.async_step_init">async_step_init() (cremalink_ha.config_flow.CremalinkOptionsFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual">async_step_manual() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_manual_map">async_step_manual_map() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_reconfigure">async_step_reconfigure() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.async_step_user">async_step_user() (cremalink_ha.config_flow.CremalinkConfigFlow method)</a>
+</li>
       <li><a href="api/cremalink_ha.switch.html#cremalink_ha.switch.CremalinkPowerSwitch.async_turn_off">async_turn_off() (cremalink_ha.switch.CremalinkPowerSwitch method)</a>
 
       <ul>
@@ -196,6 +220,13 @@
 </li>
       </ul></li>
       <li>
+    cremalink_ha.config_flow
+
+      <ul>
+        <li><a href="api/cremalink_ha.config_flow.html#module-cremalink_ha.config_flow">module</a>
+</li>
+      </ul></li>
+      <li>
     cremalink_ha.const
 
       <ul>
@@ -247,7 +278,11 @@
 </li>
       <li><a href="api/cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkCloudCounterSensor">CremalinkCloudCounterSensor (class in cremalink_ha.sensor)</a>
 </li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow">CremalinkConfigFlow (class in cremalink_ha.config_flow)</a>
+</li>
       <li><a href="api/cremalink_ha.coordinator.html#cremalink_ha.coordinator.CremalinkCoordinator">CremalinkCoordinator (class in cremalink_ha.coordinator)</a>
+</li>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkOptionsFlow">CremalinkOptionsFlow (class in cremalink_ha.config_flow)</a>
 </li>
       <li><a href="api/cremalink_ha.switch.html#cremalink_ha.switch.CremalinkPowerSwitch">CremalinkPowerSwitch (class in cremalink_ha.switch)</a>
 </li>
@@ -294,6 +329,18 @@
   </ul></td>
 </tr></table>
 
+<h2 id="G">G</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.get_available_maps">get_available_maps() (in module cremalink_ha.config_flow)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.get_map_data">get_map_data() (in module cremalink_ha.config_flow)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="I">I</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
@@ -320,6 +367,8 @@
         <li><a href="api/cremalink_ha.binary_sensor.html#module-cremalink_ha.binary_sensor">cremalink_ha.binary_sensor</a>
 </li>
         <li><a href="api/cremalink_ha.button.html#module-cremalink_ha.button">cremalink_ha.button</a>
+</li>
+        <li><a href="api/cremalink_ha.config_flow.html#module-cremalink_ha.config_flow">cremalink_ha.config_flow</a>
 </li>
         <li><a href="api/cremalink_ha.const.html#module-cremalink_ha.const">cremalink_ha.const</a>
 </li>
@@ -411,6 +460,14 @@
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/cremalink_ha.diagnostics.html#cremalink_ha.diagnostics.USER_NAME_BLOB_FAMILIES">USER_NAME_BLOB_FAMILIES (in module cremalink_ha.diagnostics)</a>
+</li>
+  </ul></td>
+</tr></table>
+
+<h2 id="V">V</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/cremalink_ha.config_flow.html#cremalink_ha.config_flow.CremalinkConfigFlow.VERSION">VERSION (cremalink_ha.config_flow.CremalinkConfigFlow attribute)</a>
 </li>
   </ul></td>
 </tr></table>

@@ -89,6 +89,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">CONNECTION_CLOUD</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
 
 <span class="c1">#: Monitor-value sensors: (key, icon, unit, enum_profile_key). Names come from</span>
 <span class="c1">#: the entity translations (``cremalink_&lt;key&gt;``); enum-keyed sensors also</span>
@@ -184,7 +185,7 @@
 
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">_CremalinkEntityBase</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_CremalinkEntityBase</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">]):</span>
 <span class="w">    </span><span class="sd">"""Shared availability/lifecycle rules for Cremalink entities."""</span>
 
     <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>

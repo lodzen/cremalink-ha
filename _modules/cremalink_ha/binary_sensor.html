@@ -88,6 +88,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
 
 <span class="c1">#: Monitor predicates: (key, icon, device class). Names come from the entity</span>
 <span class="c1">#: translations, keyed by ``key``.</span>
@@ -158,7 +159,9 @@
 
 <div class="viewcode-block" id="CremalinkBinarySensor">
 <a class="viewcode-back" href="../../api/cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkBinarySensor</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">,</span> <span class="n">BinarySensorEntity</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkBinarySensor</span><span class="p">(</span>
+    <span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">BinarySensorEntity</span>
+<span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Representation of a Cremalink binary sensor."""</span>
 
     <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>
