@@ -22,7 +22,26 @@ from cremalink import (
     log_event,
 )
 
-from .const import *
+from .const import (
+    CONF_ADDON_URL,
+    CONF_ADVERTISED_IP,
+    CONF_CONNECTION_MODE,
+    CONF_CONNECTION_TYPE,
+    CONF_DEVICE_IP,
+    CONF_DEVICE_MAP,
+    CONF_DSN,
+    CONF_LAN_KEY,
+    CONF_TOKEN_FILE,
+    CONNECTION_CLOUD,
+    CONNECTION_LOCAL,
+    CONNECTION_MODE_EMBEDDED,
+    CUSTOM_MAP_DIR,
+    DEFAULT_MONITOR_POLL_INTERVAL,
+    DEFAULT_NUDGER_POLL_INTERVAL,
+    DEVICE_NAME,
+    DOMAIN,
+    REPAIR_RECONFIGURE_REQUIRED,
+)
 from .coordinator import CremalinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -210,6 +229,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             # Create the local device instance, pointed at our own
             # in-process server instead of an external add-on/CLI process.
+            # bound_port is set by start() above — a None port means the
+            # server never bound, which start() would have raised on.
+            assert embedded_server.bound_port is not None
             device = await hass.async_add_executor_job(
                 partial(
                     create_local_device,
@@ -260,7 +282,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DEFAULT_MONITOR_POLL_INTERVAL if embedded_server is not None else None
         ),
     )
-    await coordinator.async_config_entry_first_refresh()
 
     if embedded_server is not None:
         entry.async_on_unload(partial(_async_bounded_stop, embedded_server, dsn))
@@ -275,6 +296,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await _async_clear_legacy_entity_names(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # First refresh runs in the background: on a cold property store the
+    # monitor/settings/statistics GET sweep drains at one command per
+    # ~1.3 s machine poll (protocol.md §14.12), so awaiting it here would
+    # block Home Assistant startup by tens of seconds. Entities read as
+    # unavailable until the monitor lands — their `available` properties
+    # already model that — and the coordinator's own interval keeps
+    # retrying, so a machine that is offline at boot self-heals without
+    # a config-entry retry cycle.
+    entry.async_create_background_task(
+        hass, coordinator.async_refresh(), f"{DOMAIN}_{entry.entry_id}_first_refresh"
+    )
     return True
 
 

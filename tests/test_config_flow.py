@@ -5,9 +5,6 @@ Covers spec US1 (cloud login replaces manual device-map/DSN entry), US2
 discovery -> local connection), and US4 (graceful cloud-only fallback).
 """
 
-import asyncio
-from unittest.mock import MagicMock
-
 import pytest
 from custom_components.cremalink_ha import config_flow as cf_mod
 from custom_components.cremalink_ha.config_flow import (
@@ -21,27 +18,17 @@ from custom_components.cremalink_ha.const import (
     CONF_DSN,
     CONNECTION_CLOUD,
     CONNECTION_LOCAL,
+    DOMAIN,
 )
 
-
-def _run(coro):
-    return asyncio.run(coro)
-
-
-def _make_hass(tmp_path):
-    hass = MagicMock()
-
-    async def _executor(func, *args, **kwargs):
-        return func(*args, **kwargs)
-
-    hass.async_add_executor_job = _executor
-    hass.config.path = lambda *parts: str(tmp_path.joinpath(*parts))
-    return hass
+from tests.helpers import make_entry
 
 
 def _make_flow(hass) -> CremalinkConfigFlow:
+    """A directly-driven flow on a real hass (steps are invoked by tests)."""
     flow = CremalinkConfigFlow()
     flow.hass = hass
+    flow.handler = DOMAIN
     flow.context = {}
     return flow
 
@@ -110,8 +97,8 @@ def _patch_cloud(monkeypatch):
 
 
 class TestCloudLoginStep:
-    def test_single_coffee_device_creates_entry_without_prompt(
-        self, tmp_path, monkeypatch
+    async def test_single_coffee_device_creates_entry_without_prompt(
+        self, hass, monkeypatch
     ):
         _FakeClient.raw_devices = ["DSN1"]
         _FakeClient.coffee_devices = [
@@ -124,18 +111,16 @@ class TestCloudLoginStep:
         ]
         monkeypatch.setattr(cf_mod, "detect_model_id", lambda *a, **k: "ECAM452")
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "pw", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "pw", "manual_setup": False}
         )
 
         assert result["type"] == "create_entry"
         assert result["data"][CONF_DSN] == "DSN1"
         assert result["data"][CONF_DEVICE_MAP] == "ECAM452"
 
-    def test_multi_device_account_shows_device_select(self, tmp_path):
+    async def test_multi_device_account_shows_device_select(self, hass):
         _FakeClient.raw_devices = ["DSN1", "DSN2"]
         _FakeClient.coffee_devices = [
             {"dsn": "DSN1", "product_name": "PrimaDonna", "oem_model": "DL-pd-soul"},
@@ -146,64 +131,56 @@ class TestCloudLoginStep:
             },
         ]
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "pw", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "pw", "manual_setup": False}
         )
 
         assert result["type"] == "form"
         assert result["step_id"] == "device_select"
 
-    def test_invalid_credentials_show_auth_failed(self, tmp_path, monkeypatch):
+    async def test_invalid_credentials_show_auth_failed(self, hass, monkeypatch):
         monkeypatch.setattr(
             cf_mod,
             "authenticate_cloud",
             lambda email, password: (_ for _ in ()).throw(ValueError("bad creds")),
         )
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "wrong", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "wrong", "manual_setup": False}
         )
 
         assert result["type"] == "form"
         assert result["step_id"] == "user"
         assert result["errors"]["base"] == "auth_failed"
 
-    def test_zero_coffee_devices_shows_no_coffee_machine_error(self, tmp_path):
+    async def test_zero_coffee_devices_shows_no_coffee_machine_error(self, hass):
         _FakeClient.raw_devices = ["DSN1"]
         _FakeClient.coffee_devices = []
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "pw", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "pw", "manual_setup": False}
         )
 
         assert result["errors"]["base"] == "no_coffee_machine"
 
-    def test_zero_devices_shows_no_devices_error(self, tmp_path):
+    async def test_zero_devices_shows_no_devices_error(self, hass):
         _FakeClient.raw_devices = []
         _FakeClient.coffee_devices = []
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "pw", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "pw", "manual_setup": False}
         )
 
         assert result["errors"]["base"] == "no_devices"
 
-    def test_advanced_setup_checkbox_routes_to_manual_step_unchanged(self, tmp_path):
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user({"email": "", "password": "", "manual_setup": True})
+    async def test_advanced_setup_checkbox_routes_to_manual_step_unchanged(self, hass):
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "", "password": "", "manual_setup": True}
         )
 
         assert result["type"] == "form"
@@ -211,18 +188,24 @@ class TestCloudLoginStep:
 
 
 class TestAdvertisedIPOptionsFlow:
-    def _make_options_flow(self, connection_type=CONNECTION_LOCAL, options=None):
-        entry = MagicMock()
-        entry.data = {CONF_CONNECTION_TYPE: connection_type}
-        entry.options = options or {}
+    def _make_options_flow(
+        self, hass, connection_type=CONNECTION_LOCAL, options=None, data=None
+    ):
+        # config_entry resolves via flow.handler + the real entries manager.
+        entry = make_entry(
+            data={CONF_CONNECTION_TYPE: connection_type, **(data or {})},
+            options=options or {},
+        )
+        entry.add_to_hass(hass)
         flow = CremalinkOptionsFlow()
-        flow.config_entry = entry
+        flow.hass = hass
+        flow.handler = entry.entry_id
         return flow
 
-    def test_local_options_form_has_no_polling_control(self):
-        flow = self._make_options_flow()
+    async def test_local_options_form_has_no_polling_control(self, hass):
+        flow = self._make_options_flow(hass)
 
-        result = _run(flow.async_step_init())
+        result = await flow.async_step_init()
 
         assert result["type"] == "form"
         assert result["step_id"] == "init"
@@ -231,11 +214,12 @@ class TestAdvertisedIPOptionsFlow:
         assert CONF_ADVERTISED_IP in schema_keys
         assert "monitor_poll_interval" not in schema_keys
 
-    def test_local_options_form_defaults_advertised_ip_from_entry(self):
-        flow = self._make_options_flow()
-        flow.config_entry.data[CONF_ADVERTISED_IP] = "192.168.178.96"
+    async def test_local_options_form_defaults_advertised_ip_from_entry(self, hass):
+        flow = self._make_options_flow(
+            hass, data={CONF_ADVERTISED_IP: "192.168.178.96"}
+        )
 
-        result = _run(flow.async_step_init())
+        result = await flow.async_step_init()
 
         schema = result["data_schema"].schema
         advertised_ip_key = next(
@@ -243,48 +227,48 @@ class TestAdvertisedIPOptionsFlow:
         )
         assert advertised_ip_key.default() == "192.168.178.96"
 
-    def test_save_drops_legacy_polling_option_and_preserves_advertised_ip(self):
+    async def test_save_drops_legacy_polling_option_and_preserves_advertised_ip(
+        self, hass
+    ):
         flow = self._make_options_flow(
-            options={"monitor_poll_interval": 12, CONF_ADVERTISED_IP: "10.0.0.2"}
+            hass,
+            options={"monitor_poll_interval": 12, CONF_ADVERTISED_IP: "10.0.0.2"},
         )
 
-        result = _run(
-            flow.async_step_init(
-                {
-                    CONF_ADVERTISED_IP: " 192.168.178.96 ",
-                }
-            )
+        result = await flow.async_step_init(
+            {
+                CONF_ADVERTISED_IP: " 192.168.178.96 ",
+            }
         )
 
         assert result["data"] == {
             CONF_ADVERTISED_IP: "192.168.178.96",
         }
 
-    def test_local_options_reject_invalid_advertised_ip(self):
-        flow = self._make_options_flow()
+    async def test_local_options_reject_invalid_advertised_ip(self, hass):
+        flow = self._make_options_flow(hass)
 
-        result = _run(
-            flow.async_step_init(
-                {
-                    CONF_ADVERTISED_IP: "192.168.178.999",
-                }
-            )
+        result = await flow.async_step_init(
+            {
+                CONF_ADVERTISED_IP: "192.168.178.999",
+            }
         )
 
         assert result["type"] == "form"
         assert result["errors"]["base"] == "invalid_advertised_ip"
 
-    def test_cloud_options_are_not_supported(self):
-        flow = self._make_options_flow(connection_type=CONNECTION_CLOUD)
+    async def test_cloud_options_are_not_supported(self, hass):
+        flow = self._make_options_flow(hass, connection_type=CONNECTION_CLOUD)
 
-        result = _run(flow.async_step_init())
+        result = await flow.async_step_init()
 
-        assert result == {"type": "abort", "reason": "local_only"}
+        assert result["type"] == "abort"
+        assert result["reason"] == "local_only"
 
 
 class TestModelDetectionFallback:
-    def test_unresolved_model_routes_to_manual_map_prefilled(
-        self, tmp_path, monkeypatch
+    async def test_unresolved_model_routes_to_manual_map_prefilled(
+        self, hass, monkeypatch
     ):
         _FakeClient.raw_devices = ["DSN1"]
         _FakeClient.coffee_devices = [
@@ -296,11 +280,9 @@ class TestModelDetectionFallback:
         ]
         monkeypatch.setattr(cf_mod, "detect_model_id", lambda *a, **k: None)
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "pw", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "pw", "manual_setup": False}
         )
 
         assert result["type"] == "form"
@@ -308,14 +290,14 @@ class TestModelDetectionFallback:
         assert result["description_placeholders"]["dsn"] == "DSN1"
         assert result["description_placeholders"]["device_name"] == "Mystery Machine"
 
-        result2 = _run(flow.async_step_manual_map({CONF_DEVICE_MAP: "ECAM612"}))
+        result2 = await flow.async_step_manual_map({CONF_DEVICE_MAP: "ECAM612"})
         assert result2["type"] == "create_entry"
         assert result2["data"][CONF_DEVICE_MAP] == "ECAM612"
 
 
 class TestLocalConnectionCompletion:
-    def test_lan_enabled_and_local_supported_creates_local_entry(
-        self, tmp_path, monkeypatch
+    async def test_lan_enabled_and_local_supported_creates_local_entry(
+        self, hass, monkeypatch
     ):
         _FakeClient.raw_devices = ["DSN1"]
         _FakeClient.coffee_devices = [
@@ -329,11 +311,9 @@ class TestLocalConnectionCompletion:
         }
         monkeypatch.setattr(cf_mod, "detect_model_id", lambda *a, **k: "ECAM452")
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "pw", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "pw", "manual_setup": False}
         )
 
         assert result["type"] == "create_entry"
@@ -348,32 +328,30 @@ class TestLocalConnectionCompletion:
 class TestManualLocalSetup:
     """Manual/advanced local setup no longer offers an add-on URL step."""
 
-    def test_device_step_never_shows_or_collects_addon_url(self, tmp_path):
-        flow = _make_flow(_make_hass(tmp_path))
+    async def test_device_step_never_shows_or_collects_addon_url(self, hass):
+        flow = _make_flow(hass)
 
         # Home Assistant's menu jumps straight to async_step_device() on
         # selection -- it never calls back through async_step_choose_connection.
-        result = _run(flow.async_step_device())
+        result = await flow.async_step_device()
 
         assert result["type"] == "form"
         assert result["step_id"] == "device"
         assert "addon_url" not in str(result["data_schema"])
 
-    def test_device_step_creates_embedded_mode_entry(self, tmp_path):
-        flow = _make_flow(_make_hass(tmp_path))
-        _run(flow.async_step_device())
+    async def test_device_step_creates_embedded_mode_entry(self, hass):
+        flow = _make_flow(hass)
+        await flow.async_step_device()
 
-        result = _run(
-            flow.async_step_device(
-                {
-                    "device_name": "My Machine",
-                    "dsn": "DSN9",
-                    "lan_key": "key9",
-                    "device_ip": "192.168.1.9",
-                    "advertised_ip": "192.168.178.96",
-                    "device_map": "ECAM452",
-                }
-            )
+        result = await flow.async_step_device(
+            {
+                "device_name": "My Machine",
+                "dsn": "DSN9",
+                "lan_key": "key9",
+                "device_ip": "192.168.1.9",
+                "advertised_ip": "192.168.178.96",
+                "device_map": "ECAM452",
+            }
         )
 
         assert result["type"] == "create_entry"
@@ -381,36 +359,36 @@ class TestManualLocalSetup:
         assert result["data"]["connection_mode"] == "embedded"
         assert result["data"]["advertised_ip"] == "192.168.178.96"
 
-    def test_device_step_rejects_invalid_advertised_ip(self, tmp_path):
-        flow = _make_flow(_make_hass(tmp_path))
-        _run(flow.async_step_device())
+    async def test_device_step_rejects_invalid_advertised_ip(self, hass):
+        flow = _make_flow(hass)
+        await flow.async_step_device()
 
-        result = _run(
-            flow.async_step_device(
-                {
-                    "device_name": "My Machine",
-                    "dsn": "DSN9",
-                    "lan_key": "key9",
-                    "device_ip": "192.168.1.9",
-                    "advertised_ip": "192.168.178.999",
-                    "device_map": "ECAM452",
-                }
-            )
+        result = await flow.async_step_device(
+            {
+                "device_name": "My Machine",
+                "dsn": "DSN9",
+                "lan_key": "key9",
+                "device_ip": "192.168.1.9",
+                "advertised_ip": "192.168.178.999",
+                "device_map": "ECAM452",
+            }
         )
 
         assert result["type"] == "form"
         assert result["errors"]["base"] == "invalid_advertised_ip"
 
-    def test_choose_connection_menu_step_exists_and_matches_option_keys(self, tmp_path):
+    async def test_choose_connection_menu_step_exists_and_matches_option_keys(
+        self, hass
+    ):
         """Regression test: Home Assistant requires a menu's own step_id to
         be a real async_step_* method (raises UnknownStep otherwise), even
         though selecting an option never calls back into it -- it jumps
         straight to async_step_<chosen>. Every menu_options key must also
         be a real async_step_* method for the same reason.
         """
-        flow = _make_flow(_make_hass(tmp_path))
+        flow = _make_flow(hass)
 
-        result = _run(flow.async_step_choose_connection())
+        result = await flow.async_step_choose_connection()
 
         assert result["type"] == "menu"
         assert result["step_id"] == "choose_connection"
@@ -420,7 +398,9 @@ class TestManualLocalSetup:
 
 
 class TestCloudFallbackCompletion:
-    def test_lan_disabled_completes_as_cloud_automatically(self, tmp_path, monkeypatch):
+    async def test_lan_disabled_completes_as_cloud_automatically(
+        self, hass, monkeypatch
+    ):
         _FakeClient.raw_devices = ["DSN1"]
         _FakeClient.coffee_devices = [
             {"dsn": "DSN1", "product_name": "PrimaDonna", "oem_model": "DL-pd-soul"}
@@ -433,11 +413,9 @@ class TestCloudFallbackCompletion:
         }
         monkeypatch.setattr(cf_mod, "detect_model_id", lambda *a, **k: "ECAM452")
 
-        flow = _make_flow(_make_hass(tmp_path))
-        result = _run(
-            flow.async_step_user(
-                {"email": "a@b.com", "password": "pw", "manual_setup": False}
-            )
+        flow = _make_flow(hass)
+        result = await flow.async_step_user(
+            {"email": "a@b.com", "password": "pw", "manual_setup": False}
         )
 
         assert result["type"] == "create_entry"

@@ -4,8 +4,17 @@ import json
 import logging
 import os
 from ipaddress import IPv4Address
+from typing import TYPE_CHECKING
 
-import voluptuous as vol
+if TYPE_CHECKING:
+    # HA types data_schema as probatio.Schema; keep the static type
+    # unambiguous so checkers don't union it with voluptuous.
+    import probatio as vol
+else:
+    try:
+        import probatio as vol
+    except ImportError:  # older HA ships only voluptuous
+        import voluptuous as vol
 from cremalink.clients.auth import authenticate_cloud
 from cremalink.devices import get_device_maps, load_device_map
 from cremalink.domain.model_detection import detect_model_id
@@ -16,7 +25,28 @@ from homeassistant.helpers import issue_registry as ir
 
 from cremalink import Client, log_event
 
-from .const import *
+from .const import (
+    CONF_ADDON_URL,
+    CONF_ADVERTISED_IP,
+    CONF_CONNECTION_MODE,
+    CONF_CONNECTION_TYPE,
+    CONF_DEVICE_IP,
+    CONF_DEVICE_MAP,
+    CONF_DSN,
+    CONF_EMAIL,
+    CONF_LAN_KEY,
+    CONF_MANUAL_SETUP,
+    CONF_PASSWORD,
+    CONF_REFRESH_TOKEN,
+    CONF_TOKEN_FILE,
+    CONNECTION_CLOUD,
+    CONNECTION_LOCAL,
+    CONNECTION_MODE_EMBEDDED,
+    CUSTOM_MAP_DIR,
+    DEVICE_NAME,
+    DOMAIN,
+    TOKEN_DIR,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -173,6 +203,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._cloud_selected_device = device
 
         def _detect():
+            assert self._cloud_token_file is not None  # set by the login step
             client = Client(self._cloud_token_file, logger=_LOGGER)
             serial = client.get_serial_number(device["dsn"])
             return detect_model_id(
@@ -224,6 +255,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_name = device.get("product_name") or dsn
 
         def _fetch_lan():
+            assert self._cloud_token_file is not None  # set by the login step
             client = Client(self._cloud_token_file, logger=_LOGGER)
             return client.get_lan_config(dsn)
 
@@ -510,6 +542,8 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         entry_id = self.context["entry_id"]
         entry = self.hass.config_entries.async_get_entry(entry_id)
+        if entry is None:
+            return self.async_abort(reason="reconfigure_entry_missing")
         errors = {}
 
         if user_input is not None:

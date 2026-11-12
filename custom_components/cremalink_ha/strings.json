@@ -114,6 +114,12 @@
     "switch": {
       "power": {
         "name": "Power"
+      },
+      "setting_beep": {
+        "name": "Beep"
+      },
+      "setting_energy_saving": {
+        "name": "Energy Saving"
       }
     },
     "select": {

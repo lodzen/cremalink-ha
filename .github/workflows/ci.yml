@@ -1,0 +1,73 @@
+# CI: pytest on real Home Assistant, ruff lint + format check, ty type check.
+# cremalink comes from source — the lodzen/cremalink repo, same-named branch
+# when it exists there, else its default branch — so the suite exercises the
+# library under development, never a PyPI release. It is cloned into
+# $RUNNER_TEMP, outside this repo's tree: cremalink's own CI lints and
+# type-checks it, so nothing here may scan it.
+name: CI
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      # pytest-homeassistant requires >=3.14.2; HA 2026.11 runs on it.
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.14"
+    - name: Clone cremalink source
+      run: |
+        BRANCH="${{ github.head_ref || github.ref_name }}"
+        if git ls-remote --exit-code --heads https://github.com/lodzen/cremalink.git "$BRANCH" >/dev/null 2>&1; then
+          git clone --depth 1 --branch "$BRANCH" https://github.com/lodzen/cremalink.git "$RUNNER_TEMP/cremalink"
+        else
+          git clone --depth 1 https://github.com/lodzen/cremalink.git "$RUNNER_TEMP/cremalink"
+        fi
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements_test.txt "$RUNNER_TEMP/cremalink"
+    - name: Test with pytest
+      run: pytest
+      env:
+        PYTHONPATH: .
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.14"
+    - name: Clone cremalink source
+      run: |
+        BRANCH="${{ github.head_ref || github.ref_name }}"
+        if git ls-remote --exit-code --heads https://github.com/lodzen/cremalink.git "$BRANCH" >/dev/null 2>&1; then
+          git clone --depth 1 --branch "$BRANCH" https://github.com/lodzen/cremalink.git "$RUNNER_TEMP/cremalink"
+        else
+          git clone --depth 1 https://github.com/lodzen/cremalink.git "$RUNNER_TEMP/cremalink"
+        fi
+    - name: Install dependencies and tools
+      # requirements_test.txt pins HA + the test harness; the remaining
+      # project deps come from pyproject.toml minus cremalink-lodzen and
+      # homeassistant (installed from source / the pin above instead).
+      run: |
+        python -m venv .venv
+        DEPS=$(python -c 'import tomllib; print(" ".join(d for d in tomllib.load(open("pyproject.toml","rb"))["project"]["dependencies"] if "cremalink" not in d and "homeassistant" not in d))')
+        .venv/bin/pip install -r requirements_test.txt "$RUNNER_TEMP/cremalink" $DEPS ruff==0.14.5 ty==0.0.101
+    - name: Ruff lint
+      run: .venv/bin/ruff check .
+    - name: Ruff format check
+      run: .venv/bin/ruff format --check .
+    - name: Type check with ty
+      run: .venv/bin/ty check .
+      env:
+        PYTHONPATH: .

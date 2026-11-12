@@ -13,6 +13,7 @@ from .const import (
     NOT_READY_STATUSES,
     TRANSLATED_COMMANDS,
 )
+from .coordinator import CremalinkCoordinator
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -38,7 +39,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
 
-class CremalinkButton(CoordinatorEntity, ButtonEntity):
+class CremalinkButton(CoordinatorEntity[CremalinkCoordinator], ButtonEntity):
     """Representation of a Cremalink button."""
 
     _attr_has_entity_name = True

@@ -11,6 +11,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, CONNECTION_CLOUD, DOMAIN, STANDBY_STATUSES
+from .coordinator import CremalinkCoordinator
 
 #: Monitor-value sensors: (key, icon, unit, enum_profile_key). Names come from
 #: the entity translations (``cremalink_<key>``); enum-keyed sensors also
@@ -103,7 +104,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
 
-class _CremalinkEntityBase(CoordinatorEntity):
+class _CremalinkEntityBase(CoordinatorEntity[CremalinkCoordinator]):
     """Shared availability/lifecycle rules for Cremalink entities."""
 
     _attr_has_entity_name = True

@@ -10,6 +10,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES
+from .coordinator import CremalinkCoordinator
 
 #: Monitor predicates: (key, icon, device class). Names come from the entity
 #: translations, keyed by ``key``.
@@ -75,7 +76,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(entities)
 
 
-class CremalinkBinarySensor(CoordinatorEntity, BinarySensorEntity):
+class CremalinkBinarySensor(
+    CoordinatorEntity[CremalinkCoordinator], BinarySensorEntity
+):
     """Representation of a Cremalink binary sensor."""
 
     _attr_has_entity_name = True

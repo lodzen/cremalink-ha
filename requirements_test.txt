@@ -1,5 +1,6 @@
 pytest>=9.0.3
 pytest-cov>=7.1.0
-requests>=2.33.1
-voluptuous>=0.16.0
-cryptography>=48.0.0
+# Real Home Assistant plus its in-repo test harness, published to PyPI in
+# lockstep with core — the plugin version IS the homeassistant version it
+# pins (pytest==9.0.3, respx, pytest-socket, ... come along as its deps).
+pytest-homeassistant==2026.11.0
