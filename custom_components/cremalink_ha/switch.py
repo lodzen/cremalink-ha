@@ -16,6 +16,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES
+from .coordinator import CremalinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             hass.async_create_task(entity.async_refresh_state())
 
 
-class CremalinkPowerSwitch(CoordinatorEntity, SwitchEntity):
+class CremalinkPowerSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity):
     """Representation of a Cremalink power switch."""
 
     _attr_has_entity_name = True
@@ -111,7 +112,7 @@ class CremalinkPowerSwitch(CoordinatorEntity, SwitchEntity):
         await self.coordinator.async_request_refresh()
 
 
-class CremalinkSettingSwitch(CoordinatorEntity, SwitchEntity):
+class CremalinkSettingSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity):
     """A boolean flag inside the shared param-63 user-config word.
 
     Writes go through ``Device.set_setting_bit``: the current word is read

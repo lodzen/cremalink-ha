@@ -54,9 +54,7 @@ def run_migration(monkeypatch):
         # AttributeError on every later access across the whole session).
         er_mock = MagicMock()
         er_mock.async_get = lambda hass: registry
-        er_mock.async_entries_for_config_entry = (
-            lambda reg, entry_id: registry.entries
-        )
+        er_mock.async_entries_for_config_entry = lambda reg, entry_id: registry.entries
         monkeypatch.setattr(init_mod, "er", er_mock)
         dr_mock = MagicMock()
         dr_mock.async_get = lambda hass: SimpleNamespace(
@@ -80,7 +78,9 @@ class TestClearsStaleEnglishNames:
         self, run_migration
     ):
         # First start with the new code: original_name is still English.
-        updates = run_migration([_reg("sensor.k_status", "Primadonna Status", "Status")])
+        updates = run_migration(
+            [_reg("sensor.k_status", "Primadonna Status", "Status")]
+        )
         assert updates == [("sensor.k_status", {"name": None})]
 
     def test_original_name_already_german_is_matched_via_the_english_translation(
@@ -122,7 +122,12 @@ class TestClearsStaleEnglishNames:
 class TestKeepsRealCustomisations:
     @pytest.mark.parametrize(
         "stored",
-        ["Kaffeemaschine Status", "Mein Status", "Primadonna Statusanzeige", "Status 2"],
+        [
+            "Kaffeemaschine Status",
+            "Mein Status",
+            "Primadonna Statusanzeige",
+            "Status 2",
+        ],
     )
     def test_genuine_custom_names_stay(self, run_migration, stored):
         updates = run_migration([_reg("sensor.k_status", stored, "Status")])

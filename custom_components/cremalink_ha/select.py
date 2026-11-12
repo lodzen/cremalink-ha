@@ -20,6 +20,7 @@ from homeassistant.helpers.restore_state import RestoreEntity, RestoreStateData
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, DOMAIN, NOT_READY_STATUSES, STANDBY_STATUSES
+from .coordinator import CremalinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         hass.async_create_task(entity.async_refresh_state())
 
 
-class _BaseSelect(CoordinatorEntity, SelectEntity):
+class _BaseSelect(CoordinatorEntity[CremalinkCoordinator], SelectEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_has_entity_name = True
 
@@ -93,6 +94,10 @@ class _BaseSelect(CoordinatorEntity, SelectEntity):
                 self.hass.async_create_task(self._async_refresh_after_wake())
             self._asleep = not awake
         super()._handle_coordinator_update()
+
+    async def async_refresh_state(self):
+        """Refresh the option state; implemented by each concrete select."""
+        raise NotImplementedError
 
     async def _async_refresh_after_wake(self):
         await self.async_refresh_state()

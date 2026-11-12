@@ -22,7 +22,26 @@ from cremalink import (
     log_event,
 )
 
-from .const import *
+from .const import (
+    CONF_ADDON_URL,
+    CONF_ADVERTISED_IP,
+    CONF_CONNECTION_MODE,
+    CONF_CONNECTION_TYPE,
+    CONF_DEVICE_IP,
+    CONF_DEVICE_MAP,
+    CONF_DSN,
+    CONF_LAN_KEY,
+    CONF_TOKEN_FILE,
+    CONNECTION_CLOUD,
+    CONNECTION_LOCAL,
+    CONNECTION_MODE_EMBEDDED,
+    CUSTOM_MAP_DIR,
+    DEFAULT_MONITOR_POLL_INTERVAL,
+    DEFAULT_NUDGER_POLL_INTERVAL,
+    DEVICE_NAME,
+    DOMAIN,
+    REPAIR_RECONFIGURE_REQUIRED,
+)
 from .coordinator import CremalinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -210,6 +229,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             # Create the local device instance, pointed at our own
             # in-process server instead of an external add-on/CLI process.
+            # bound_port is set by start() above — a None port means the
+            # server never bound, which start() would have raised on.
+            assert embedded_server.bound_port is not None
             device = await hass.async_add_executor_job(
                 partial(
                     create_local_device,

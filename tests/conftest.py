@@ -160,6 +160,11 @@ class _DataUpdateCoordinatorBase:
     async def async_request_refresh(self):
         return None
 
+    @classmethod
+    def __class_getitem__(cls, _item):
+        # Allow `DataUpdateCoordinator[T]` in production code under the stub.
+        return cls
+
 
 _uc_mod = sys.modules["homeassistant.helpers.update_coordinator"]
 _uc_mod.DataUpdateCoordinator = _DataUpdateCoordinatorBase
@@ -168,6 +173,11 @@ _uc_mod.UpdateFailed = _UpdateFailed
 
 class _CoordinatorEntityBase:
     """Stand-in for HA's update_coordinator.CoordinatorEntity."""
+
+    @classmethod
+    def __class_getitem__(cls, _item):
+        # Allow `CoordinatorEntity[CremalinkCoordinator]` under the stub.
+        return cls
 
     def __init__(self, coordinator):
         self.coordinator = coordinator

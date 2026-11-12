@@ -6,6 +6,7 @@ from datetime import timedelta
 from functools import partial
 
 from cremalink.domain.device import Device
+from cremalink.parsing.monitor.view import MonitorView
 from cremalink.ecam.settings import SETTING_BIT_MAPS, SETTING_OPTION_MAPS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -49,7 +50,7 @@ MONITOR_ATTEMPTS = 3
 MONITOR_RETRY_DELAY = 0.7
 
 
-class CremalinkCoordinator(DataUpdateCoordinator):
+class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
     """Class to manage fetching data from the Cremalink device."""
 
     def __init__(

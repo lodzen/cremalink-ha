@@ -4,6 +4,7 @@ Covers pre-filled values, the optional advertised_ip override, successful
 reconfiguration (data rewrite + reload + repair-issue cleanup), and
 cancelling/dismissing (entry stays flagged).
 """
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
@@ -99,9 +100,7 @@ def test_reconfigure_rejects_invalid_advertised_ip():
     entry = _legacy_entry()
     flow, hass = _make_flow(entry)
 
-    result = _run(
-        flow.async_step_reconfigure({CONF_ADVERTISED_IP: "192.168.178.999"})
-    )
+    result = _run(flow.async_step_reconfigure({CONF_ADVERTISED_IP: "192.168.178.999"}))
 
     assert result["type"] == "form"
     assert result["errors"]["base"] == "invalid_advertised_ip"
@@ -121,7 +120,9 @@ def test_completing_reconfigure_rewrites_entry_and_reloads():
     assert new_data[CONF_LAN_KEY] == "key1"
     assert new_data[CONF_DEVICE_IP] == "192.168.1.5"
     hass.config_entries.async_reload.assert_awaited_once_with(entry.entry_id)
-    cf_mod.ir.async_delete_issue.assert_called_once_with(hass, DOMAIN, f"reconfigure_{entry.entry_id}")
+    cf_mod.ir.async_delete_issue.assert_called_once_with(
+        hass, DOMAIN, f"reconfigure_{entry.entry_id}"
+    )
 
 
 def test_not_submitting_leaves_entry_untouched():

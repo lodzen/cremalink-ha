@@ -15,6 +15,19 @@ docs = [
     "sphinx-rtd-theme==3.1.0"
 ]
 
+[tool.ty.src]
+# The test suite stubs all of `homeassistant` with MagicMocks — attributes
+# resolve as mock children, not real types, so checking it is meaningless.
+# docs/source/conf.py is a Sphinx build script that mocks HA imports.
+exclude = ["tests", "docs"]
+
+[tool.ty.rules]
+# HA entities override writable cached_property attributes (is_on,
+# native_value, options, current_option, extra_state_attributes...) with
+# read-only @property declarations — the universal entity idiom that ty's
+# override check flags as a false positive.
+incompatible-property-override = "ignore"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

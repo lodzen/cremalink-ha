@@ -71,9 +71,7 @@ def make_device(**overrides):
         select_profile=overrides.get("select_profile", lambda index: True),
         get_settings=overrides.get("get_settings", lambda **_: {}),
         set_setting=overrides.get("set_setting", lambda key, idx: True),
-        get_setting_bits=overrides.get(
-            "get_setting_bits", lambda *, refresh=True: {}
-        ),
+        get_setting_bits=overrides.get("get_setting_bits", lambda *, refresh=True: {}),
         set_setting_bit=overrides.get("set_setting_bit", lambda key, on: True),
         do=overrides.get("do", lambda name: None),
         configure=overrides.get("configure", lambda: None),
