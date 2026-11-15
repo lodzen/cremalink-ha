@@ -1,5 +1,6 @@
 """Data update coordinator for the Cremalink integration."""
 
+import asyncio
 import logging
 import time
 from datetime import timedelta
@@ -111,6 +112,35 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
         # available ~1 poll in; slow lanes (profile/settings/statistics
         # GET bursts) defer to the next cycle — §14.12 queue discipline.
         self._first_update_done = False
+        # Profile/settings/statistics run in one background task so a slow
+        # cloud round never holds back the monitor update (§14.12).
+        self._slow_lanes_task: asyncio.Task | None = None
+
+    def _schedule_slow_lanes(self) -> None:
+        """Start the slow lanes unless a previous round is still running."""
+        if self._slow_lanes_task is not None and not self._slow_lanes_task.done():
+            return
+        self._slow_lanes_task = self.hass.async_create_background_task(
+            self._async_slow_lanes(), name=f"{DOMAIN} slow lanes"
+        )
+
+    async def _async_slow_lanes(self) -> None:
+        """Profile read-back, settings and statistics, then notify entities."""
+        refresh_profile = getattr(self.device, "refresh_current_profile", None)
+        if refresh_profile is not None:
+            try:
+                await self.hass.async_add_executor_job(refresh_profile)
+            except (OSError, ValueError, RuntimeError) as err:
+                _LOGGER.debug("current-profile refresh failed: %s", err)
+        await self._async_fetch_settings()
+        await self._async_fetch_statistics()
+        self.async_update_listeners()
+
+    async def async_shutdown(self) -> None:
+        """Cancel a running slow-lane round on unload."""
+        if self._slow_lanes_task is not None and not self._slow_lanes_task.done():
+            self._slow_lanes_task.cancel()
+        await super().async_shutdown()
 
     async def _async_fetch_settings(self) -> None:
         """Refresh the tracked settings values/bits when due.
@@ -279,14 +309,7 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
             # track the machine's own selected profile so the select
             # entity follows panel-side changes. Skipped in standby; the
             # device self-throttles; failures must not flap the refresh.
-            refresh_profile = getattr(self.device, "refresh_current_profile", None)
-            if refresh_profile is not None:
-                try:
-                    await self.hass.async_add_executor_job(refresh_profile)
-                except (OSError, ValueError, RuntimeError) as err:
-                    _LOGGER.debug("current-profile refresh failed: %s", err)
-            await self._async_fetch_settings()
-            await self._async_fetch_statistics()
+            self._schedule_slow_lanes()
             return data
         except Exception as err:
             self.consecutive_failures += 1

@@ -7,6 +7,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -56,13 +57,29 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # Every other documented monitor bit: motor position, clean knob, doors,
     # hardware faults… Rare faults are registered but disabled by default.
+    # The device map may narrow the documented bits to what the model has:
+    # ``exclude`` bits are not created (stale registry entries are removed),
+    # ``disabled_by_default`` bits are registered disabled.
+    policy = getattr(coordinator.device, "monitor_bits", None) or {}
+    excluded = set(policy.get("exclude") or ())
+    disabled = set(policy.get("disabled_by_default") or ())
     for bit in SWITCH_BITS.values():
+        if bit.key in excluded:
+            continue
         entities.append(
             CremalinkBitSensor(
-                coordinator, entry, "switch", bit, "mdi:toggle-switch-outline", None
+                coordinator,
+                entry,
+                "switch",
+                bit,
+                "mdi:toggle-switch-outline",
+                None,
+                enabled_default=bit.common and bit.key not in disabled,
             )
         )
     for bit in ALARM_BITS.values():
+        if bit.key in excluded:
+            continue
         entities.append(
             CremalinkBitSensor(
                 coordinator,
@@ -71,10 +88,26 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 bit,
                 "mdi:alert-outline",
                 BinarySensorDeviceClass.PROBLEM,
+                enabled_default=bit.common and bit.key not in disabled,
             )
         )
 
     async_add_entities(entities)
+    _remove_excluded_bit_entities(hass, entry, excluded)
+
+
+def _remove_excluded_bit_entities(hass, entry, excluded) -> None:
+    """Drop registry entries of bits the device map now excludes."""
+    if not excluded:
+        return
+    ent_reg = er.async_get(hass)
+    for source in ("switch", "alarm"):
+        for key in excluded:
+            entity_id = ent_reg.async_get_entity_id(
+                "binary_sensor", DOMAIN, f"{entry.entry_id}_{source}_{key}"
+            )
+            if entity_id is not None:
+                ent_reg.async_remove(entity_id)
 
 
 class CremalinkBinarySensor(
@@ -178,7 +211,9 @@ class CremalinkBinarySensor(
 class CremalinkBitSensor(CremalinkBinarySensor):
     """One documented switch/alarm bit of the monitor frame (diagnostic)."""
 
-    def __init__(self, coordinator, entry, source, bit, icon, dev_class):
+    def __init__(
+        self, coordinator, entry, source, bit, icon, dev_class, enabled_default=None
+    ):
         """Initialize the bit sensor.
 
         Args:
@@ -192,7 +227,9 @@ class CremalinkBitSensor(CremalinkBinarySensor):
         super().__init__(coordinator, entry, f"{source}_{bit.key}", icon, dev_class)
         self._source = source
         self._bit_key = bit.key
-        self._attr_entity_registry_enabled_default = bit.common
+        self._attr_entity_registry_enabled_default = (
+            bit.common if enabled_default is None else enabled_default
+        )
 
     def _read(self):
         view = self.coordinator.data

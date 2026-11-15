@@ -40,6 +40,7 @@ def make_device(**overrides):
     device = SimpleNamespace(
         statistics_source=overrides.get("statistics_source", "native"),
         statistics_datapoints=overrides.get("statistics_datapoints"),
+        monitor_bits=overrides.get("monitor_bits", {}),
         capabilities=overrides.get("capabilities", {}),
         monitor_profile=overrides.get(
             "monitor_profile",

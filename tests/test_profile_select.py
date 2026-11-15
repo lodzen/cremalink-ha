@@ -1,6 +1,7 @@
 """Profile select entity: occupied-slot options + acked-state tracking (T030)."""
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 from cremalink.ecam.profiles import ProfileSlot
 from custom_components.cremalink_ha import select as select_mod
 
@@ -65,7 +66,9 @@ class TestProfileSelect:
         )
         profile = next(e for e in entities if e.unique_id == "entry1_profile")
         profile._current_option = "Alice"
-        await profile.async_select_option("Bob")
+        # An unconfirmed switch is reported, and the previous option stays.
+        with pytest.raises(HomeAssistantError):
+            await profile.async_select_option("Bob")
         assert profile.current_option == "Alice"
 
     async def test_unknown_option_raises(self, hass):

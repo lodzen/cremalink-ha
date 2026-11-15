@@ -283,7 +283,18 @@ class CremalinkProfileSelect(_BaseSelect, RestoreEntity):
         index = self._slots.get(option)
         if index is None:
             raise ValueError(f"unknown profile option {option!r}")
-        ok = await self.hass.async_add_executor_job(self.device.select_profile, index)
+        try:
+            ok = await self.hass.async_add_executor_job(
+                self.device.select_profile, index
+            )
+        except (OSError, TimeoutError, RuntimeError) as err:
+            raise HomeAssistantError(
+                f"Could not switch the profile to {option}: {err}"
+            ) from err
+        if not ok:
+            raise HomeAssistantError(
+                f"The machine did not confirm the switch to profile {option}."
+            )
         # Non-striker applies 0xA9 without an ack (fire-and-forget like
         # the app) — ok means "sent, no nack"; an explicit nack keeps
         # the previous option rather than pretending the selection took.

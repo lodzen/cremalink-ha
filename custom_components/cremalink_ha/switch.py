@@ -28,11 +28,11 @@ from .const import (
 )
 from .coordinator import CremalinkCoordinator
 
-_LOGGER = logging.getLogger(__name__)
+#: How long the switch shows the commanded state before trusting the
+#: monitor again (a wake-up was seen to report only after ~3 min).
+POWER_PENDING_SECONDS = 240
 
-#: How long a wakeup/standby intent is held before the monitor's report
-#: wins again — ECAM wake-up incl. rinse can take ~a minute.
-_PENDING_SECONDS = 120
+_LOGGER = logging.getLogger(__name__)
 
 #: Bit-setting switch definitions: (setting key, translation-key suffix,
 #: icon). The suffix doubles as the unique-id tail.
@@ -99,31 +99,29 @@ class CremalinkPowerSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity
             name=entry.title,
             manufacturer="cremalink",
         )
+        # (target state, monotonic deadline) after a command: the machine
+        # takes 30 s to minutes to report waking up or going to sleep, and
+        # the switch must not snap back meanwhile.
         self._pending: tuple[bool, float] | None = None
+
+    def _reported_on(self) -> bool | None:
+        if not self.coordinator.data or not self.coordinator.data.status_name:
+            return None
+        return self.coordinator.data.status_name.lower() not in {"standby"} | (
+            STANDBY_STATUSES - {"going_to_sleep"}
+        )
 
     @property
     def is_on(self):
-        """Return true if the switch is on.
-
-        A wakeup/standby transition takes a while on the machine (wake
-        incl. rinse can run ~a minute): the monitor still reports
-        ``in_standby`` right after the command lands, which flipped the
-        switch straight back. The intended state is held until the
-        monitor confirms it or the pending window expires.
-        """
-        status = (getattr(self.coordinator.data, "status_name", "") or "").lower()
+        """Return true if the switch is on."""
+        reported = self._reported_on()
         if self._pending is not None:
-            target, since = self._pending
-            if not status:
-                return target
-            awake = status not in ("standby", "in_standby")
-            if awake == target or time.monotonic() - since >= _PENDING_SECONDS:
+            target, deadline = self._pending
+            if reported == target or time.monotonic() >= deadline:
                 self._pending = None
             else:
                 return target
-        if not status:
-            return None
-        return status not in ("standby", "in_standby")
+        return reported
 
     @property
     def available(self):
@@ -132,19 +130,24 @@ class CremalinkPowerSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity
             return False
         return super().available
 
-    async def async_turn_on(self, **kwargs):
-        """Turn the switch on."""
-        await self.hass.async_add_executor_job(self.device.do, "wakeup")
-        self._pending = (True, time.monotonic())
+    async def _async_power(self, command: str, target: bool) -> None:
+        try:
+            await self.hass.async_add_executor_job(self.device.do, command)
+        except (OSError, TimeoutError, RuntimeError, ValueError) as err:
+            raise HomeAssistantError(
+                f"Could not send '{command}' to the machine: {err}"
+            ) from err
+        self._pending = (target, time.monotonic() + POWER_PENDING_SECONDS)
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
+    async def async_turn_on(self, **kwargs):
+        """Turn the switch on."""
+        await self._async_power("wakeup", True)
+
     async def async_turn_off(self, **kwargs):
         """Turn the switch off."""
-        await self.hass.async_add_executor_job(self.device.do, "standby")
-        self._pending = (False, time.monotonic())
-        self.async_write_ha_state()
-        await self.coordinator.async_request_refresh()
+        await self._async_power("standby", False)
 
 
 class CremalinkSettingSwitch(
