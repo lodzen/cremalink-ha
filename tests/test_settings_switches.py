@@ -139,6 +139,30 @@ class TestWrites:
         switch._handle_coordinator_update()
         assert switch.is_on is True
 
+    async def test_requested_state_shows_while_write_is_confirmed(self, hass):
+        """Over the cloud a confirmation takes up to ~45 s; the switch must
+        show the requested value meanwhile instead of the old one."""
+        seen = []
+        _, entities = await _setup(hass, get_setting_bits=lambda **_: {"beep": True})
+        switch = _by_uid(entities, "entry1_setting_beep")
+        switch.device.set_setting_bit = (
+            lambda key, on: seen.append(switch.is_on) or True
+        )
+        await switch.async_turn_off()
+        assert seen == [False]
+        assert switch.is_on is False
+
+    async def test_unconfirmed_write_restores_previous_state(self, hass):
+        _, entities = await _setup(
+            hass,
+            get_setting_bits=lambda **_: {"beep": True},
+            set_setting_bit=lambda key, on: False,
+        )
+        switch = _by_uid(entities, "entry1_setting_beep")
+        with pytest.raises(HomeAssistantError):
+            await switch.async_turn_off()
+        assert switch.is_on is True
+
     async def test_turn_off_calls_set_setting_bit(self, hass):
         calls = []
         _, entities = await _setup(

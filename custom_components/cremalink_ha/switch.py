@@ -157,7 +157,9 @@ class CremalinkSettingSwitch(
 
     Writes go through ``Device.set_setting_bit``: the current word is read
     first and the flag merged in, so unrelated bits survive (protocol.md
-    §14.8). State only ever reflects machine-confirmed values —
+    §14.8). While a write waits for the machine's confirmation (over the
+    cloud up to ~45 s) the switch shows the requested value; a write the
+    machine does not confirm restores the previous one.
     ``RestoreEntity`` keeps the last confirmed state visible across a
     restart when standby blocks the re-read; a successful fetch wins.
     """
@@ -182,6 +184,8 @@ class CremalinkSettingSwitch(
         self._setting = SETTING_BIT_MAPS[key]
         self._asleep = False
         self._is_on = None
+        #: Requested value while a write awaits confirmation.
+        self._pending: bool | None = None
         self._attr_unique_id = f"{entry.entry_id}_{suffix}"
         self._attr_translation_key = suffix
         self._attr_icon = icon
@@ -200,7 +204,9 @@ class CremalinkSettingSwitch(
 
     @property
     def is_on(self):
-        """Last machine-confirmed bit state (None = unread yet)."""
+        """Requested state during a write, else the machine-confirmed one."""
+        if self._pending is not None:
+            return self._pending
         return self._is_on
 
     @property
@@ -250,16 +256,22 @@ class CremalinkSettingSwitch(
         self._is_on = bits.get(self._key)
 
     async def _async_set(self, on):
-        """Write the flag; only a machine-confirmed write updates state."""
+        """Write the flag, showing the requested value until confirmed."""
+        self._pending = on
+        self.async_write_ha_state()
         try:
             ok = await self.hass.async_add_executor_job(
                 self.device.set_setting_bit, self._key, on
             )
         except (OSError, TimeoutError, RuntimeError) as err:
+            self._pending = None
+            self.async_write_ha_state()
             raise HomeAssistantError(
                 f"The machine did not confirm the change of {self.name}: {err}"
             ) from err
+        self._pending = None
         if not ok:
+            self.async_write_ha_state()
             raise HomeAssistantError(f"The machine rejected the change of {self.name}.")
         self._is_on = on
         # The write is machine-confirmed — patch the coordinator's
