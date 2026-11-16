@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from tests.helpers import (
     FakeMonitorData,
+    make_coordinator,
     make_device,
     make_entry,
     setup_entities,
@@ -211,21 +212,62 @@ class TestCurrentProfileRefresh:
         assert calls == [1]
         assert settings_calls == [1]
 
-    async def test_current_profile_also_refreshed_in_standby(self, hass):
-        # The machine answered 0xA2 reads while in_standby (2026-10-14
-        # log), so the profile read is attempted in standby too; the
-        # device self-throttles and keeps last-known on no answer.
+    async def test_slow_lanes_skipped_in_standby_and_resume_on_wake(self, hass):
+        # Standby traffic gate: profile/settings/statistics cannot
+        # change while the machine sleeps (panel off, writes need an
+        # announced session) — queueing their GETs only produced the
+        # user-observed request drip against the sleeping machine
+        # (~330 requests / 4 min live). On wake the lanes resume.
         calls = []
+        settings_calls = []
+        stats_calls = []
         monitor = FakeMonitorData(status_name="in_standby")
         device = make_device(
             get_monitor=lambda: monitor,
             refresh_current_profile=lambda: calls.append(1),
         )
+        orig_settings = device.get_settings
+        device.get_settings = lambda **kw: settings_calls.append(1) or orig_settings(
+            **kw
+        )
+        orig_stats = device.get_statistics
+        device.get_statistics = lambda: stats_calls.append(1) or orig_stats()
         coordinator, _ = await setup_entities(
             hass, make_entry(), device, sensor_mod, monitor
         )
         await coordinator._async_update_data()
+        assert calls == []
+        assert settings_calls == []
+        assert stats_calls == []
+        monitor.status_name = "ready"
+        await coordinator._async_update_data()
         assert calls == [1]
+        assert settings_calls == [1]
+        assert stats_calls == [1]
+
+    async def test_embedded_server_informed_of_sleep_state(self, hass):
+        # The coordinator mirrors the monitor's standby status into the
+        # embedded server so its monitor/nudger jobs drop to standby
+        # cadence — that is what silences the per-second PUT nudges.
+        spy_calls = []
+
+        class _Spy:
+            state = "running"
+
+            def set_machine_asleep(self, asleep):
+                spy_calls.append(asleep)
+
+        monitor = FakeMonitorData(status_name="ready")
+        device = make_device(get_monitor=lambda: monitor)
+        coordinator = make_coordinator(
+            hass, device, monitor=monitor, embedded_server=_Spy()
+        )
+        coordinator.data = monitor
+        await coordinator._async_update_data()
+        assert spy_calls == [False]
+        monitor.status_name = "in_standby"
+        await coordinator._async_update_data()
+        assert spy_calls == [False, True]
 
     async def test_profile_refresh_failure_keeps_refresh_healthy(self, hass):
         def _boom():

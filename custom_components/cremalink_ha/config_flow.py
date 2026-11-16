@@ -154,6 +154,7 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         {"error_type": type(e).__name__},
                         level=logging.ERROR,
                     )
+                    _LOGGER.debug("cloud login failed: %.300s", str(e))
                     errors["base"] = "auth_failed"
                 else:
                     self._cloud_token_file = temp_file
@@ -283,9 +284,15 @@ class CremalinkConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_LAN_KEY: lan["lanip_key"],
                 CONF_DEVICE_IP: lan["lan_ip"],
             }
-            # Local connection doesn't need the cloud refresh token — discard it.
+            # Keep the refresh token (never the password) so the recipe
+            # catalogue can be seeded from one cloud request like the app
+            # does (research.md R11); the local connection itself never
+            # uses it, and a missing/expired token only costs the optimisation.
             if self._cloud_token_file and os.path.exists(self._cloud_token_file):
-                os.remove(self._cloud_token_file)
+                token_dir = self.hass.config.path(TOKEN_DIR)
+                final_token_path = os.path.join(token_dir, f"{dsn}.json")
+                os.rename(self._cloud_token_file, final_token_path)
+                data[CONF_TOKEN_FILE] = final_token_path
         else:
             token_dir = self.hass.config.path(TOKEN_DIR)
             final_token_path = os.path.join(token_dir, f"{dsn}.json")
@@ -607,6 +614,13 @@ class CremalinkOptionsFlow(OptionsFlow):
                 advertised_ip = None
                 errors["base"] = "invalid_advertised_ip"
 
+            token_file = self.config_entry.options.get(CONF_TOKEN_FILE)
+            email, password = user_input.get(CONF_EMAIL), user_input.get(CONF_PASSWORD)
+            if not errors and email and password:
+                token_file = await self._async_save_cloud_token(email, password)
+                if token_file is None:
+                    errors["base"] = "auth_failed"
+
             if not errors:
                 options = {}
                 if CONF_ADVERTISED_IP in user_input:
@@ -619,6 +633,8 @@ class CremalinkOptionsFlow(OptionsFlow):
                     options[CONF_ADVERTISED_IP] = self.config_entry.data[
                         CONF_ADVERTISED_IP
                     ]
+                if token_file:
+                    options[CONF_TOKEN_FILE] = token_file
                 return self.async_create_entry(
                     title="",
                     data=options,
@@ -638,7 +654,37 @@ class CremalinkOptionsFlow(OptionsFlow):
                     vol.Optional(
                         CONF_ADVERTISED_IP, default=current_advertised_ip
                     ): str,
+                    vol.Optional(CONF_EMAIL): str,
+                    vol.Optional(CONF_PASSWORD): str,
                 }
             ),
             errors=errors,
         )
+
+    async def _async_save_cloud_token(self, email: str, password: str) -> str | None:
+        """Log in once and keep only the refresh token; ``None`` on failure.
+
+        The password is used transiently and never stored. The token enables
+        the one-request cloud catalogue seed (research.md R11).
+        """
+        dsn = self.config_entry.data[CONF_DSN]
+        token_dir = self.hass.config.path(TOKEN_DIR)
+        token_path = os.path.join(token_dir, f"{dsn}.json")
+
+        def _login() -> str:
+            token = authenticate_cloud(email, password)
+            os.makedirs(token_dir, exist_ok=True)
+            token.save(token_path)
+            return token_path
+
+        try:
+            return await self.hass.async_add_executor_job(_login)
+        except Exception as err:  # noqa: BLE001 - any login failure → form error
+            log_event(
+                _LOGGER,
+                "cloud_login_failed",
+                {"error_type": type(err).__name__},
+                level=logging.ERROR,
+            )
+            _LOGGER.debug("cloud login failed (options flow): %.300s", str(err))
+            return None

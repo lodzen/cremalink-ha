@@ -8,6 +8,7 @@ from cremalink.ecam.statistics import interpret
 from cremalink.parsing.monitor.profile import MonitorProfile
 from custom_components.cremalink_ha.const import DOMAIN
 from custom_components.cremalink_ha.coordinator import CremalinkCoordinator
+from custom_components.cremalink_ha.recipe_session import RecipeSession
 
 
 class FakeMonitorData:
@@ -65,6 +66,18 @@ def make_device(**overrides):
         set_setting_bit=overrides.get("set_setting_bit", lambda key, on: True),
         do=overrides.get("do", lambda name: None),
         configure=overrides.get("configure", lambda: None),
+        get_commands=overrides.get("get_commands", list),
+        command_map=overrides.get("command_map", {}),
+        beverage_catalog=overrides.get("beverage_catalog", lambda **_: []),
+        recipe_priority_loaded=overrides.get(
+            "recipe_priority_loaded", lambda profile_slot=None: True
+        ),
+        brew_entry=overrides.get("brew_entry", lambda bid: None),
+        recipe_params=overrides.get("recipe_params", lambda bid, **_: None),
+        brew=overrides.get("brew", lambda *a, **kw: None),
+        catalog_datapoints=overrides.get("catalog_datapoints", []),
+        bean_systems=overrides.get("bean_systems", list),
+        select_bean_system=overrides.get("select_bean_system", lambda slot: True),
     )
     return device
 
@@ -101,6 +114,7 @@ async def setup_entities(hass, entry, device, platform_module, monitor=None):
         "coordinator": coordinator,
         "device": device,
         "embedded_server": None,
+        "recipe_session": RecipeSession(device),
     }
     entities = []
     await platform_module.async_setup_entry(hass, entry, entities.extend)

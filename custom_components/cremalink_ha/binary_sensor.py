@@ -7,6 +7,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES
@@ -77,7 +78,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 
 class CremalinkBinarySensor(
-    CoordinatorEntity[CremalinkCoordinator], BinarySensorEntity
+    CoordinatorEntity[CremalinkCoordinator], BinarySensorEntity, RestoreEntity
 ):
     """Representation of a Cremalink binary sensor."""
 
@@ -110,6 +111,35 @@ class CremalinkBinarySensor(
         )
 
         self._standby_cache = None
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        # Standby monitor frames carry no evaluatable bits — the live
+        # reading lands only after the next wake, so the standby cache is
+        # seeded from the restored state (US7: no "unknown" after restart).
+        # The saved state itself is often "unknown" (standby already hid
+        # the bits when it was persisted) — then the last *known* value
+        # survives in the attributes instead.
+        last = await self.async_get_last_state()
+        if last is None:
+            return
+        state = last.state
+        if state not in ("on", "off"):
+            state = last.attributes.get("last_known_state")
+        if state in ("on", "off"):
+            self._standby_cache = state == "on"
+
+    @property
+    def extra_state_attributes(self):
+        """Persist the last live reading — it survives "unknown" states.
+
+        ``_standby_cache`` is updated on every successful read, so this
+        attribute always carries the newest confirmed bit even when the
+        visible state is unknown (standby frames without bits).
+        """
+        if self._standby_cache is None:
+            return None
+        return {"last_known_state": "on" if self._standby_cache else "off"}
 
     @property
     def available(self):

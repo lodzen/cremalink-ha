@@ -145,7 +145,9 @@ class TestCoverage:
         power = de["switch"]["power"]["name"]
         stop = de["button"]["cmd_stop"]["name"]
         recipes = [
-            entry["name"] for key, entry in de["button"].items() if key != "cmd_stop"
+            entry["name"]
+            for key, entry in de["button"].items()
+            if key.startswith("cmd_") and key != "cmd_stop"
         ]
         assert len(recipes) == len(TRANSLATED_COMMANDS) - 1
         assert power.casefold() < stop.casefold() < min(r.casefold() for r in recipes)
@@ -200,7 +202,7 @@ class TestCommands:
             button_mod,
             FakeMonitorData(status_name="ready"),
         )
-        (button,) = entities
+        (button,) = [e for e in entities if e.unique_id == "entry1_cmd_custom_drink"]
         assert button.translation_key is None
         assert button._attr_name == "Brew Custom Drink"
 

@@ -51,6 +51,7 @@ class _FakeEmbeddedServer:
         monitor_poll_interval=5.0,
         nudger_poll_interval=1.0,
         event_logger=None,
+        cloud_token_path=None,
     ):
         self.dsn = dsn
         self.device_ip = device_ip
@@ -60,6 +61,7 @@ class _FakeEmbeddedServer:
         self.nudger_poll_interval = nudger_poll_interval
         self.session_keepalive_seconds = 20.0
         self.event_logger = event_logger
+        self.cloud_token_path = cloud_token_path
         self.telemetry_events = []
         self.bound_port = _FakeEmbeddedServer.next_port
         _FakeEmbeddedServer.next_port += 1
@@ -80,8 +82,11 @@ class _FakeEmbeddedServer:
             level, "%s details=%s", event, details
         )
 
-    def log_telemetry(self, event, details):
+    def log_telemetry(self, event, details, *, level=logging.INFO):
         self.telemetry_events.append((event, details))
+
+    def set_machine_asleep(self, asleep):
+        self.machine_asleep = asleep
 
 
 class _FakeDevice:

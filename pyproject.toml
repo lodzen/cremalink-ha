@@ -21,6 +21,12 @@ docs = [
 # docs/source/conf.py is a Sphinx build script that mocks HA imports.
 exclude = ["tests", "docs"]
 
+[tool.ty.environment]
+# Local dev installs cremalink editable from the sibling repo — ty cannot
+# follow editable .pth finders, so the source tree is a search root too.
+# In CI cremalink is pip-installed into site-packages; the root is a no-op.
+root = [".", "../cremalink"]
+
 [tool.ty.rules]
 # HA entities override writable cached_property attributes (is_on,
 # native_value, options, current_option, extra_state_attributes...) with

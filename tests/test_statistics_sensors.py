@@ -82,6 +82,29 @@ class TestNativeSource:
         by_uid = {e.unique_id: e for e in entities}
         assert by_uid["entry1_stat_descales"].native_value is None
 
+    async def test_counters_stay_available_on_outage(self, hass):
+        """Once a report exists, a fetch outage must not flap the counter —
+        a lifetime value can only grow while the machine brews."""
+        coordinator, entities = await _setup(hass)
+        coordinator.statistics = interpret(
+            [(43010, 42)], source="native", complete=True
+        )
+        by_uid = {e.unique_id: e for e in entities}
+        sensor = by_uid["entry1_stat_total_beverages"]
+        # Monitor data gone + failures past the availability threshold.
+        coordinator.data = None
+        coordinator.consecutive_failures = coordinator.failure_threshold
+        assert sensor.available is True
+        assert sensor.native_value == 42
+        # Monitor sensors still follow the normal availability rules.
+        assert by_uid["entry1_status_name"].available is False
+
+    async def test_counters_unavailable_until_first_report(self, hass):
+        coordinator, entities = await _setup(hass)
+        coordinator.data = None
+        by_uid = {e.unique_id: e for e in entities}
+        assert by_uid["entry1_stat_total_beverages"].available is False
+
 
 class TestCloudCounters:
     async def test_cloud_entry_creates_counter_sensors(self, hass):

@@ -1,6 +1,7 @@
 """Entity organisation: categories, Stop availability, bit sensors, wake refresh."""
 
 import json
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -187,7 +188,11 @@ class TestEntityCategories:
             "entry1_setting_water_hardness",
         }
         for entity in entities:
-            assert entity.entity_category == EntityCategory.CONFIG
+            # The recipe select is a primary control, not configuration.
+            if entity.unique_id == "entry1_recipe":
+                assert entity.entity_category is None
+            else:
+                assert entity.entity_category == EntityCategory.CONFIG
 
     async def test_monitor_sensor_categories(self, hass):
         _, entities = await _setup(
@@ -342,6 +347,32 @@ class TestWakeRefresh:
         await hass.async_block_till_done()
         assert calls == []
 
+    async def test_retries_refresh_while_awake_and_options_empty(self, hass):
+        """Booted while the machine was already awake: no asleep→awake
+        transition ever fires, so a priming that raced the LAN
+        registration would leave options empty forever (live-observed
+        2026-11: profile/bean selects stuck at unknown with ready
+        machine). Retries are throttled to one read per minute."""
+        calls = []
+        _, entities = await _setup(
+            hass,
+            select_mod,
+            FakeMonitorData(status_name="ready"),
+            get_profiles=lambda: calls.append(1) or self._profiles(["Alice"])(),
+        )
+        profile = _by_uid(entities, "entry1_profile")
+        await hass.async_block_till_done()
+        calls.clear()
+        profile._slots = {}  # priming produced nothing
+        profile._handle_coordinator_update()
+        await hass.async_block_till_done()
+        assert calls == [1]  # throttled retry fires once
+        assert profile.options == ["Alice"]
+        profile._slots = {}  # read failed again
+        profile._handle_coordinator_update()
+        await hass.async_block_till_done()
+        assert calls == [1]  # within the 60 s throttle — no re-read
+
 
 def _en_entity_names():
     data = json.loads((TRANSLATIONS / "en.json").read_text())
@@ -469,6 +500,45 @@ class TestProfileRestore:
         assert profile.device.current_profile == 1
 
 
+class TestPowerSwitchPending:
+    """Wakeup takes ~a minute on the machine — the switch holds the
+    intended state instead of flipping back on the next standby poll."""
+
+    async def _switch(self, hass, status="in_standby"):
+        coordinator, entities = await _setup(
+            hass, switch_mod, FakeMonitorData(status_name=status)
+        )
+        return _by_uid(entities, "entry1_power"), coordinator
+
+    async def test_turn_on_holds_state_while_machine_wakes(self, hass):
+        switch, _ = await self._switch(hass)
+        await switch.async_turn_on()
+        # Monitor still reports standby — the intent wins.
+        assert switch.is_on is True
+
+    async def test_pending_clears_once_monitor_confirms(self, hass):
+        switch, coordinator = await self._switch(hass)
+        await switch.async_turn_on()
+        coordinator.data = FakeMonitorData(status_name="waking_up")
+        assert switch.is_on is True
+        assert switch._pending is None  # confirmed — real state now rules
+
+    async def test_pending_expires_back_to_real_state(self, hass, monkeypatch):
+        switch, _ = await self._switch(hass)
+        await switch.async_turn_on()
+        monkeypatch.setattr(switch, "_pending", (True, time.monotonic() - 121))
+        assert switch.is_on is False  # machine never woke → honest off
+
+    async def test_turn_off_holds_until_monitor_confirms(self, hass):
+        switch, coordinator = await self._switch(hass, status="ready")
+        await switch.async_turn_off()
+        coordinator.data = FakeMonitorData(status_name="going_to_sleep")
+        assert switch.is_on is False
+        coordinator.data = FakeMonitorData(status_name="in_standby")
+        assert switch.is_on is False
+        assert switch._pending is None
+
+
 class TestSelectTranslations:
     async def test_every_water_hardness_option_is_translated(self, hass):
         options = set(SETTING_OPTION_MAPS["water_hardness"].options.values())
@@ -483,3 +553,319 @@ class TestSelectTranslations:
         )
         select = _by_uid(entities, "entry1_setting_water_hardness")
         assert select.translation_key == "setting_water_hardness"
+
+
+class _LastExtra:
+    """Stored extra state, as ``RestoreEntity.async_get_last_extra_data``'s
+    ``ExtraStoredData.as_dict()`` yields."""
+
+    def __init__(self, data):
+        self._data = data
+
+    def as_dict(self):
+        return self._data
+
+
+class TestRestartRestore:
+    """Standby blocks every re-read — machine-confirmed state must survive
+    a restart instead of flipping to ``unknown`` (US7/T058–T062)."""
+
+    async def _stats_setup(self, hass, last_state):
+        from cremalink.ecam.statistics import interpret
+
+        _, entities = await _setup(
+            hass, sensor_mod, FakeMonitorData(status_name="ready")
+        )
+        sensor = _by_uid(entities, "entry1_stat_total_beverages")
+        sensor.async_get_last_state = AsyncMock(return_value=_Last(last_state, {}))
+        await sensor.async_added_to_hass()
+        return sensor, interpret
+
+    async def test_statistic_sensor_keeps_last_count(self, hass):
+        sensor, _ = await self._stats_setup(hass, "42")
+        assert sensor.coordinator.statistics is None
+        assert sensor.native_value == 42
+
+    async def test_statistic_sensor_live_report_wins(self, hass):
+        sensor, interpret = await self._stats_setup(hass, "42")
+        sensor.coordinator.statistics = interpret(
+            [(43010, 55)], source="native", complete=True
+        )
+        assert sensor.native_value == 55
+
+    async def test_statistic_sensor_unparseable_state_restores_text(self, hass):
+        # e.g. descale_status text readings — kept as-is, never garbage.
+        sensor, _ = await self._stats_setup(hass, "needed")
+        assert sensor.native_value == "needed"
+
+    async def test_statistic_sensor_no_history_stays_none(self, hass):
+        for state in ("unknown", "unavailable"):
+            sensor, _ = await self._stats_setup(hass, state)
+            assert sensor.native_value is None
+
+    async def test_setting_select_restores_option(self, hass):
+        _, entities = await _setup(
+            hass, select_mod, FakeMonitorData(status_name="ready")
+        )
+        select = _by_uid(entities, "entry1_setting_water_hardness")
+        select.async_get_last_state = AsyncMock(return_value=_Last("level_3", {}))
+        await select.async_added_to_hass()
+        assert select.current_option == "level_3"
+
+    async def test_setting_select_rejects_stale_option(self, hass):
+        _, entities = await _setup(
+            hass, select_mod, FakeMonitorData(status_name="ready")
+        )
+        select = _by_uid(entities, "entry1_setting_water_hardness")
+        select.async_get_last_state = AsyncMock(return_value=_Last("NotASetting", {}))
+        await select.async_added_to_hass()
+        assert select.current_option is None
+
+    async def test_setting_switch_restores_state(self, hass):
+        _, entities = await _setup(
+            hass, switch_mod, FakeMonitorData(status_name="ready")
+        )
+        beep = _by_uid(entities, "entry1_setting_beep")
+        beep.async_get_last_state = AsyncMock(return_value=_Last("on", {}))
+        await beep.async_added_to_hass()
+        assert beep.is_on is True
+        beep.async_get_last_state = AsyncMock(return_value=_Last("off", {}))
+        await beep.async_added_to_hass()
+        assert beep.is_on is False
+
+    async def _bean_select(self, hass, extra):
+        _, entities = await _setup(
+            hass,
+            select_mod,
+            FakeMonitorData(status_name="ready"),
+            catalog_datapoints=["d251_beansystem_1", "d252_beansystem_2"],
+            bean_systems=list,  # machine asleep: re-reads yield nothing
+        )
+        select = _by_uid(entities, "entry1_bean_system")
+        select.async_get_last_extra_data = AsyncMock(return_value=extra)
+        await select.async_added_to_hass()
+        return select
+
+    async def test_bean_select_restores_options_and_selection(self, hass):
+        select = await self._bean_select(
+            hass,
+            _LastExtra(
+                {
+                    "bean_systems": [
+                        {"slot": 1, "name": "Crema", "selected": True},
+                        {"slot": 2, "name": "Bohnen 2", "selected": False},
+                    ]
+                }
+            ),
+        )
+        assert select.options == ["Crema", "Bohnen 2"]
+        assert select.current_option == "Crema"
+
+    async def test_bean_select_persists_systems_as_attributes(self, hass):
+        from cremalink.domain.device import BeanSystem
+
+        select = await self._bean_select(hass, None)
+        assert select.extra_state_attributes is None
+        select._systems = [BeanSystem(1, "Crema", True)]
+        assert select.extra_state_attributes == {
+            "bean_systems": [{"slot": 1, "name": "Crema", "selected": True}]
+        }
+
+    async def test_bean_select_declares_extra_restore_state_data(self, hass):
+        """Regression: without ``extra_restore_state_data`` HA persists
+        ``extra_data: null`` — the restore read always came back None
+        (live-observed: selects showed ``unknown`` after restart)."""
+        from cremalink.domain.device import BeanSystem
+
+        select = await self._bean_select(hass, None)
+        assert select.extra_restore_state_data is None
+        select._systems = [BeanSystem(1, "Crema", True)]
+        assert select.extra_restore_state_data.as_dict() == {
+            "bean_systems": [{"slot": 1, "name": "Crema", "selected": True}]
+        }
+
+    async def test_recipe_select_re_arms_last_recipe(self, hass):
+        _, entities = await _setup(
+            hass,
+            select_mod,
+            FakeMonitorData(status_name="ready"),
+        )
+        select = _by_uid(entities, "entry1_recipe")
+        select.async_get_last_extra_data = AsyncMock(
+            return_value=_LastExtra({"selected_beverage": 7})
+        )
+        await select.async_added_to_hass()
+        assert select.session.selected_beverage == 7
+        # Options map to labels only — a vanished recipe shows no option.
+        assert select.session.params is None
+
+    async def test_recipe_select_without_history_keeps_none(self, hass):
+        _, entities = await _setup(
+            hass, select_mod, FakeMonitorData(status_name="ready")
+        )
+        select = _by_uid(entities, "entry1_recipe")
+        select.async_get_last_extra_data = AsyncMock(return_value=None)
+        await select.async_added_to_hass()
+        assert select.session.selected_beverage is None
+
+    async def test_restored_recipe_loads_params_on_wake(self, hass):
+        """The restored selection re-arms: deferred in standby, loaded
+        on the first awake coordinator update."""
+        loads = []
+        coordinator, entities = await _setup(
+            hass,
+            select_mod,
+            FakeMonitorData(status_name="in_standby"),
+            recipe_params=lambda bid, **_: loads.append(bid)
+            or type("P", (), {"beverage_id": bid, "profile_slot": 1})(),
+        )
+        select = _by_uid(entities, "entry1_recipe")
+        select.async_get_last_extra_data = AsyncMock(
+            return_value=_LastExtra({"selected_beverage": 7})
+        )
+        await select.async_added_to_hass()
+        assert select.session.selected_beverage == 7
+        # Standby: deferred, no doomed GETs.
+        await select.session.async_ensure_params(hass, coordinator)
+        assert loads == []
+        # Wake transition via a coordinator update.
+        coordinator.data = FakeMonitorData(status_name="ready")
+        select._handle_coordinator_update()
+        await hass.async_block_till_done()
+        assert loads == [7]
+
+    async def test_recipe_select_declares_extra_restore_state_data(self, hass):
+        """The persist side of the wake-reload chain: HA only stores
+        ``extra_data`` when the entity declares it — that is the piece
+        that was missing (restore read always got None)."""
+        _, entities = await _setup(
+            hass, select_mod, FakeMonitorData(status_name="ready")
+        )
+        select = _by_uid(entities, "entry1_recipe")
+        assert select.extra_restore_state_data is None
+        select.session.select(7)
+        data = select.extra_restore_state_data
+        assert data.as_dict() == {"selected_beverage": 7}
+
+    async def test_profile_select_restores_slots_and_index_from_extra_data(self, hass):
+        """Standby restart: get_profiles cannot run — slot names and the
+        remembered index must come back from extra_data alone."""
+        _, entities = await _setup(
+            hass,
+            select_mod,
+            FakeMonitorData(status_name="in_standby"),
+            get_profiles=list,  # machine answers nothing
+        )
+        profile = _by_uid(entities, "entry1_profile")
+        profile.async_get_last_state = AsyncMock(return_value=None)
+        profile.async_get_last_extra_data = AsyncMock(
+            return_value=_LastExtra(
+                {"slots": {"Alice": 1, "Bob": 2}, "profile_index": 2}
+            )
+        )
+        await profile.async_added_to_hass()
+        assert profile.options == ["Alice", "Bob"]
+        assert profile.current_option == "Bob"
+        assert profile.device.current_profile == 2  # brews use it too
+
+    async def test_profile_select_declares_extra_restore_state_data(self, hass):
+        _, entities = await _setup(
+            hass,
+            select_mod,
+            FakeMonitorData(status_name="ready"),
+            get_profiles=lambda: [ProfileSlot(index=1, name="Alice", icon=0)],
+            current_profile=1,
+        )
+        profile = _by_uid(entities, "entry1_profile")
+        await hass.async_block_till_done()
+        assert profile.extra_restore_state_data.as_dict() == {
+            "slots": {"Alice": 1},
+            "profile_index": 1,
+        }
+
+    async def test_progress_sensor_restores_standby_cache(self, hass):
+        _, entities = await _setup(
+            hass, sensor_mod, FakeMonitorData(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_progress_percent")
+        sensor.async_get_last_state = AsyncMock(return_value=_Last("80", {}))
+        await sensor.async_added_to_hass()
+        assert sensor.native_value == 80
+
+    async def test_accessory_sensor_restores_last_value(self, hass):
+        _, entities = await _setup(
+            hass, sensor_mod, FakeMonitorData(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_accessory_name")
+        sensor.async_get_last_state = AsyncMock(
+            return_value=_Last("latte_crema_hot", {})
+        )
+        await sensor.async_added_to_hass()
+        assert sensor.native_value == "latte_crema_hot"
+
+    async def test_status_sensor_falls_back_to_restored_state(self, hass):
+        coordinator, entities = await _setup(
+            hass, sensor_mod, FakeMonitorData(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_status_name")
+        sensor.async_get_last_state = AsyncMock(return_value=_Last("ready", {}))
+        await sensor.async_added_to_hass()
+        assert sensor.native_value == "in_standby"  # live monitor still wins
+        coordinator.data = FakeMonitorData()  # monitor gone entirely
+        assert sensor.native_value == "ready"
+
+    async def test_progress_sensor_restores_from_last_known_attr(self, hass):
+        # The saved state was already "unknown" (standby hid the field
+        # before the save) — the last real value survives in the attrs.
+        _, entities = await _setup(
+            hass, sensor_mod, FakeMonitorData(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_progress_percent")
+        sensor.async_get_last_state = AsyncMock(
+            return_value=_Last("unknown", {"last_known_value": "65"})
+        )
+        await sensor.async_added_to_hass()
+        assert sensor.native_value == 65
+
+    async def test_binary_sensor_restores_from_last_known_attr(self, hass):
+        _, entities = await _setup(
+            hass, bs_mod, FakeMonitorData(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_is_watertank_empty")
+        sensor.async_get_last_state = AsyncMock(
+            return_value=_Last("unknown", {"last_known_state": "on"})
+        )
+        await sensor.async_added_to_hass()
+        assert sensor.is_on is True
+        # ...and the restored reading is persisted again via the attr.
+        assert sensor.extra_state_attributes == {"last_known_state": "on"}
+
+    async def test_binary_sensor_without_any_history_stays_unknown(self, hass):
+        _, entities = await _setup(
+            hass, bs_mod, FakeMonitorData(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_is_watertank_empty")
+        sensor.async_get_last_state = AsyncMock(return_value=_Last("unknown", {}))
+        await sensor.async_added_to_hass()
+        assert sensor.is_on is None
+
+    async def test_binary_sensor_restores_standby_cache(self, hass):
+        _, entities = await _setup(
+            hass, bs_mod, FakeMonitorData(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_is_watertank_open")
+        sensor.async_get_last_state = AsyncMock(return_value=_Last("on", {}))
+        await sensor.async_added_to_hass()
+        assert sensor.is_on is True
+
+    async def test_bit_sensor_restores_standby_cache(self, hass):
+        coordinator, entities = await _setup(
+            hass, bs_mod, _View(status_name="in_standby")
+        )
+        sensor = _by_uid(entities, "entry1_alarm_descale")
+        sensor.async_get_last_state = AsyncMock(return_value=_Last("on", {}))
+        await sensor.async_added_to_hass()
+        assert sensor.is_on is True
+        # A real reading still wins once the machine wakes.
+        coordinator.data = _View(status_name="ready", alarms={"descale": False})
+        assert sensor.is_on is False

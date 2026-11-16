@@ -8,6 +8,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import PERCENTAGE, UnitOfVolume
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, CONNECTION_CLOUD, DOMAIN, STANDBY_STATUSES
@@ -124,7 +125,7 @@ class _CremalinkEntityBase(CoordinatorEntity[CremalinkCoordinator]):
         return super().available
 
 
-class CremalinkSensor(_CremalinkEntityBase, SensorEntity):
+class CremalinkSensor(_CremalinkEntityBase, SensorEntity, RestoreEntity):
     """Representation of a Cremalink monitor sensor."""
 
     def __init__(self, coordinator, entry, key, icon, unit, options=None):
@@ -145,9 +146,46 @@ class CremalinkSensor(_CremalinkEntityBase, SensorEntity):
         self._attr_icon = icon
         self._attr_native_unit_of_measurement = unit
         self._standby_cache = None
+        self._restored = None
         if options:
             self._attr_device_class = SensorDeviceClass.ENUM
             self._attr_options = options
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        # Standby frames don't evaluate accessory/progress — seed the
+        # standby cache so the last live reading survives a restart (US7).
+        # The saved state is often "unknown" (standby already hid the
+        # value when it was persisted) — fall back to last_known_value.
+        last = await self.async_get_last_state()
+        if last is None:
+            return
+        state = last.state
+        if state in ("unknown", "unavailable"):
+            state = last.attributes.get("last_known_value")
+        if state is None or state in ("unknown", "unavailable"):
+            return
+        options = getattr(self, "_attr_options", None)
+        if options is not None and state not in options:
+            return
+        try:
+            value = float(state)
+            self._restored = int(value) if value.is_integer() else value
+        except (ValueError, TypeError):
+            self._restored = state
+        self._standby_cache = self._restored
+
+    @property
+    def extra_state_attributes(self):
+        """Persist the last live reading — it survives "unknown" states.
+
+        ``_standby_cache`` is updated on every successful read, so this
+        attribute carries the newest confirmed value even while the
+        visible state is unknown (standby frames without the field).
+        """
+        if self._standby_cache is None:
+            return None
+        return {"last_known_value": self._standby_cache}
 
     def _machine_in_standby(self):
         status = getattr(self.coordinator.data, "status_name", None)
@@ -163,10 +201,45 @@ class CremalinkSensor(_CremalinkEntityBase, SensorEntity):
             return self._standby_cache
         if value is not None:
             self._standby_cache = value
-        return value
+            return value
+        return self._restored
 
 
-class CremalinkStatisticSensor(_CremalinkEntityBase, SensorEntity):
+class _StatisticsSensorBase(_CremalinkEntityBase, RestoreEntity):
+    """Retention rule for lifetime statistics counters.
+
+    A counter's last read is never wrong — it can only change while the
+    machine brews, i.e. when fetches succeed anyway. So an outage (dead
+    machine, unreachable LAN) must not flap the entity to ``unavailable``:
+    once a report exists its last values keep showing (FR-035 retention,
+    extended to availability). ``RestoreEntity`` extends the same rule
+    across restarts: standby blocks re-reads, so the last recorded state
+    stays visible until a fresh report lands.
+    """
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry)
+        self._restored = None
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is None or last.state in ("unknown", "unavailable"):
+            return
+        try:
+            value = float(last.state)
+            self._restored = int(value) if value.is_integer() else value
+        except ValueError:
+            self._restored = last.state  # e.g. descale_status text readings
+
+    @property
+    def available(self):
+        if self.coordinator.statistics is not None:
+            return True
+        return super().available
+
+
+class CremalinkStatisticSensor(_StatisticsSensorBase, SensorEntity):
     """Native 0xA2 statistics sensor (LAN-only)."""
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
@@ -185,12 +258,12 @@ class CremalinkStatisticSensor(_CremalinkEntityBase, SensorEntity):
     def native_value(self):
         report = getattr(self.coordinator, "statistics", None)
         if report is None:
-            return None
+            return self._restored
         entry = report.entries.get(self._a2_id)
-        return entry.value if entry is not None else None
+        return entry.value if entry is not None else self._restored
 
 
-class CremalinkCloudCounterSensor(_CremalinkEntityBase, SensorEntity):
+class CremalinkCloudCounterSensor(_StatisticsSensorBase, SensorEntity):
     """Cloud-counter statistics sensor backed by the Ayla datapoint cache."""
 
     def __init__(self, coordinator, entry, logical):
@@ -209,8 +282,9 @@ class CremalinkCloudCounterSensor(_CremalinkEntityBase, SensorEntity):
     def native_value(self):
         report = getattr(self.coordinator, "statistics", None)
         if report is None:
-            return None
-        return report.cloud_counters.get(self._logical)
+            return self._restored
+        value = report.cloud_counters.get(self._logical)
+        return value if value is not None else self._restored
 
     @property
     def extra_state_attributes(self):

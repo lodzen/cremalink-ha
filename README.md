@@ -75,15 +75,66 @@ integration exposes:
   up in the entity.
 - **Settings selects**: auto-off time and water hardness, writable via
   session-gated `0x90` commands with read-back confirmation.
+- **Bean System select** (BeanAdapt machines only): lists the configured
+  bean systems by the names you assigned on the machine (read from the
+  `d25x` bean blobs). Changing it sends the session-gated `0xB9` select
+  frame — protocol-derived and not yet live-verified, so it is gated on
+  machine readiness like the profile select. Bean names themselves are
+  read-only: the `0xBB` name write is not implemented.
 - **Settings switches** (device *Configuration* section): beep tone and
   energy saving — boolean flags merged into the shared user-config
   parameter via session-gated `0x90` writes with read-back confirmation.
+- **Recipe select + Brew button**: the single brew surface. Pick any
+  machine-catalogued drink in the *Recipe* select — including Bean
+  Adapt drinks (e.g. *Espresso Soul*), which brew with the bean
+  currently selected on the machine — then press *Brew*. The previous
+  per-drink buttons are gone: brewing now flows through the select.
+  - **Parameter sliders** (number entities): for the selected recipe,
+    the user-adjustable parameters (coffee amount, milk, taste,
+    temperature…) appear with the machine's own min/default/max bounds,
+    preloaded with the values stored under the active profile
+    (falling back to machine defaults while the profile read is still
+    pending — see the `values_source` attribute). Moving a slider only
+    stages the value — nothing is written to the machine until you
+    press *Brew*, and the adjustment applies to that brew only: it is
+    never persisted on the machine.
+  - **Safety gate:** after you change the recipe or the active profile,
+    the sliders and *Brew* stay unavailable until the values for the
+    new combination are loaded — the machine never brews (or edits)
+    stale values from the previous selection.
+  - **Recipe catalogue, fast and quiet**: the recipe list itself is
+    static (no machine traffic). Like the official app, the per-recipe
+    bounds and the drink-menu order can be loaded with **one** cloud
+    request: open the integration's *Configure* dialog and enter your
+    cloud e-mail and password once (the password is never stored — only
+    the refresh token is kept; entries created through the cloud login
+    keep it automatically). Without it — or if the cloud is
+    unreachable — the integration falls back to reading the machine over
+    the LAN: one request per recipe on first use, then cached. The
+    current values of a recipe are always read live from the machine.
+- **Stop brewing**: unchanged — available while a brew runs.
+
+> **Migrating from per-drink buttons:** automations or dashboards that
+> called `button.press` on `button.brew_espresso` (etc.) need updating:
+> call `select.select_option` on `select.<machine>_recipe` with the
+> drink name, then `button.press` on `button.<machine>_brew`. Parameter
+> overrides can be staged first via `number.set_value` on the
+> `number.<machine>_…` slider entities.
 
 > **A note on writes:** machine writes are announced through a short
 > (~300 s) session, which the integration manages for you. A write can
 > take a second or two to confirm and only shows up in the entity once
 > the machine acknowledged it — a failed write leaves the previous
 > option in place.
+
+> **State across restarts:** entities backed by machine-confirmed state
+> (statistics counters, profile/settings selects, bean-system select,
+> recipe selection) keep their last value after a Home Assistant
+> restart — standby blocks the machine's datapoint reads, so restored
+> values are shown until a fresh read lands; restored state never sends
+> anything to the machine. Live monitor entities (status, brew,
+> progress) always reflect the real machine state and are not
+> restored.
 
 ---
 

@@ -4,6 +4,9 @@
       "power": {
         "name": "Ein/Aus"
       },
+      "brew_recipe": {
+        "name": "Zubereiten"
+      },
       "setting_beep": {
         "name": "Signalton"
       },
@@ -14,6 +17,12 @@
     "select": {
       "profile": {
         "name": "Profil"
+      },
+      "recipe": {
+        "name": "Rezept"
+      },
+      "bean_system": {
+        "name": "Bohnensystem"
       },
       "setting_auto_off": {
         "name": "Automatische Abschaltung"
@@ -47,6 +56,13 @@
       "cmd_latte_macchiato": { "name": "Zubereiten: Latte Macchiato" },
       "cmd_long_coffee": { "name": "Zubereiten: Langer Kaffee" },
       "cmd_stop": { "name": "Stopp Zubereitung" }
+    },
+    "number": {
+      "param_coffee": { "name": "Kaffeemenge" },
+      "param_taste": { "name": "Geschmack" },
+      "param_milk": { "name": "Milch" },
+      "param_the_temp": { "name": "Temperatur" },
+      "param_water": { "name": "Wasser" }
     },
     "binary_sensor": {
       "is_busy": { "name": "Beschäftigt" },

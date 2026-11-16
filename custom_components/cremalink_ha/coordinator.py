@@ -11,7 +11,7 @@ from cremalink.ecam.settings import SETTING_BIT_MAPS, SETTING_OPTION_MAPS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
+from .const import DOMAIN, STANDBY_STATUSES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -208,6 +208,7 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
                         "warnings": getattr(snapshot, "warnings", []),
                         "errors": getattr(snapshot, "errors", []),
                     },
+                    level=logging.DEBUG,
                 )
 
             if (
@@ -222,6 +223,15 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
                 elif status is not None:
                     self.update_interval = SCAN_INTERVAL_FAST
 
+            status_name = getattr(data, "status_name", None)
+            asleep = status_name in STANDBY_STATUSES
+            if self.embedded_server is not None:
+                # Tells the monitor/nudger jobs to drop to standby
+                # cadence — polling a sleeping machine every few
+                # seconds only produces noise (live-observed ~330
+                # requests / 4 min after standby).
+                self.embedded_server.set_machine_asleep(asleep)
+
             self.consecutive_failures = 0
             if not self._first_update_done:
                 # First cycle after (re)start: return the monitor now.
@@ -233,10 +243,17 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
                 # still None).
                 self._first_update_done = True
                 return data
+            if asleep:
+                # Standby: profile/settings/statistics cannot change
+                # while asleep (panel off, writes need an announced
+                # session). Skipping the queued reads — together with
+                # the server jobs' standby cadence — keeps the sleeping
+                # machine quiet. The monitor snapshot above still flows
+                # so entities keep their standby-state values.
+                return data
             # Param-0x03EE profile readback (T055, protocol.md §5/§14.8):
             # track the machine's own selected profile so the select
-            # entity follows panel-side changes. Runs in standby too —
-            # the machine answered 0xA2 reads while in_standby — and the
+            # entity follows panel-side changes. Skipped in standby; the
             # device self-throttles; failures must not flap the refresh.
             refresh_profile = getattr(self.device, "refresh_current_profile", None)
             if refresh_profile is not None:
