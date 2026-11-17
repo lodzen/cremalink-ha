@@ -111,6 +111,7 @@
     },
     "sensor": {
       "cremalink_progress_percent": { "name": "Fortschritt" },
+      "firmware_wifi_module": { "name": "Firmware WLAN-Modul" },
       "stat_descales": { "name": "Entkalkungen" },
       "stat_water_total": { "name": "Wasser gesamt" },
       "stat_filters": { "name": "Filter" },

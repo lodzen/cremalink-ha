@@ -81,6 +81,11 @@ integration exposes:
   frame — protocol-derived and not yet live-verified, so it is gated on
   machine readiness like the profile select. Bean names themselves are
   read-only: the `0xBB` name write is not implemented.
+- **Firmware** (diagnostic): the Wi-Fi module's firmware as a sensor
+  (with the date the cloud last updated it); the machine's own firmware
+  shows on the device page. Read once at startup from the cloud — a
+  changed value after a restart means the cloud installed an update; the
+  cloud does not announce pending updates.
 - **Settings switches** (device *Configuration* section): beep tone and
   energy saving — boolean flags merged into the shared user-config
   parameter via session-gated `0x90` writes with read-back confirmation.

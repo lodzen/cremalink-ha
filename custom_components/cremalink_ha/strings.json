@@ -227,6 +227,7 @@
     },
     "sensor": {
       "cremalink_progress_percent": { "name": "Progress" },
+      "firmware_wifi_module": { "name": "Wi-Fi module firmware" },
       "stat_descales": { "name": "Descales" },
       "stat_water_total": { "name": "Water Total" },
       "stat_filters": { "name": "Filters" },

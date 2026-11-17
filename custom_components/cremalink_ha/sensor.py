@@ -1,5 +1,7 @@
 """Sensor platform for the Cremalink integration."""
 
+import logging
+
 from cremalink.ecam.statistics import CLOUD_COUNTER_CANDIDATES, STAT_LABELS
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -7,12 +9,16 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE, UnitOfVolume
+from homeassistant.const import EntityCategory
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_CONNECTION_TYPE, CONNECTION_CLOUD, DOMAIN, STANDBY_STATUSES
 from .coordinator import CremalinkCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 #: Monitor-value sensors: (key, icon, unit, enum_profile_key). Names come from
 #: the entity translations (``cremalink_<key>``); enum-keyed sensors also
@@ -101,6 +107,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
             if map_names and not any(c in map_names for c in candidates):
                 continue
             entities.append(CremalinkCloudCounterSensor(coordinator, entry, logical))
+
+    if callable(getattr(device, "firmware_info", None)):
+        entities.append(CremalinkFirmwareSensor(device, entry))
 
     async_add_entities(entities)
 
@@ -303,3 +312,53 @@ class CremalinkCloudCounterSensor(_StatisticsSensorBase, SensorEntity):
             return None
         breakdown = report.breakdowns.get(self._logical)
         return {"breakdown": breakdown} if breakdown else None
+
+
+class CremalinkFirmwareSensor(SensorEntity):
+    """Wi-Fi module firmware; also puts the machine firmware on the device.
+
+    Read once when added (cloud metadata, nothing is sent to the machine).
+    A changed value after a restart shows that the cloud updated the
+    firmware; the cloud does not announce pending updates.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "firmware_wifi_module"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:chip"
+    _attr_should_poll = False
+
+    def __init__(self, device, entry):
+        self.device = device
+        self._entry_id = entry.entry_id
+        self._attr_unique_id = f"{entry.entry_id}_firmware_wifi_module"
+        self._attr_device_info = _device_info(entry)
+        self._attr_native_value = None
+        self._attr_extra_state_attributes = {}
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        try:
+            info = await self.hass.async_add_executor_job(self.device.firmware_info)
+        except (OSError, ValueError, RuntimeError) as err:
+            _LOGGER.debug("firmware info not readable: %s", err)
+            return
+        self._attr_native_value = info.get("wifi_module")
+        attrs = {}
+        if info.get("wifi_module_updated_at"):
+            attrs["updated_at"] = info["wifi_module_updated_at"]
+        if info.get("machine"):
+            attrs["machine_firmware"] = info["machine"]
+        self._attr_extra_state_attributes = attrs
+        self.async_write_ha_state()
+        if info.get("machine"):
+            registry = dr.async_get(self.hass)
+            identifier = (DOMAIN, self._entry_id)
+            if hasattr(registry, "async_get_device_by_identifier"):
+                entry = registry.async_get_device_by_identifier(
+                    identifier, self._entry_id
+                )
+            else:  # Home Assistant before 2026.11
+                entry = registry.async_get_device(identifiers={identifier})
+            if entry is not None and entry.sw_version != info["machine"]:
+                registry.async_update_device(entry.id, sw_version=info["machine"])
