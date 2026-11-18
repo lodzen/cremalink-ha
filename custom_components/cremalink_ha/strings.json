@@ -88,17 +88,22 @@
     "step": {
       "init": {
         "title": "Local connection settings",
-        "description": "Set the IP address the coffee machine should use to reach this Home Assistant instance.",
+        "description": "Set the IP address the coffee machine should use to reach this Home Assistant instance. Optionally sign in to the cloud once so the recipe catalogue loads in a single request, like the official app.",
         "data": {
-          "advertised_ip": "Advertised IP (optional)"
+          "advertised_ip": "Advertised IP (optional)",
+          "email": "Cloud e-mail (optional)",
+          "password": "Cloud password (optional)"
         },
         "data_description": {
-          "advertised_ip": "Enter the host's LAN IPv4 address when using Docker bridge networking. The coffee machine must be able to reach this address. Leave blank to auto-detect."
+          "advertised_ip": "Enter the host's LAN IPv4 address when using Docker bridge networking. The coffee machine must be able to reach this address. Leave blank to auto-detect.",
+          "email": "Only used for the one-time sign-in. Without it the catalogue is read from the machine over the LAN, one request per recipe on first use.",
+          "password": "Never stored — only the resulting refresh token is kept."
         }
       }
     },
     "error": {
-      "invalid_advertised_ip": "Enter a valid IPv4 address."
+      "invalid_advertised_ip": "Enter a valid IPv4 address.",
+      "auth_failed": "Cloud sign-in failed. Check e-mail and password."
     },
     "abort": {
       "local_only": "These options are available only for local connections."
@@ -115,6 +120,9 @@
       "power": {
         "name": "Power"
       },
+      "brew_recipe": {
+        "name": "Brew"
+      },
       "setting_beep": {
         "name": "Beep"
       },
@@ -125,6 +133,12 @@
     "select": {
       "profile": {
         "name": "Profile"
+      },
+      "recipe": {
+        "name": "Recipe"
+      },
+      "bean_system": {
+        "name": "Bean System"
       },
       "setting_auto_off": {
         "name": "Auto-Off"
@@ -158,6 +172,13 @@
       "cmd_latte_macchiato": { "name": "Brew Latte Macchiato" },
       "cmd_long_coffee": { "name": "Brew Long Coffee" },
       "cmd_stop": { "name": "Stop brewing" }
+    },
+    "number": {
+      "param_coffee": { "name": "Coffee Amount" },
+      "param_taste": { "name": "Taste" },
+      "param_milk": { "name": "Milk" },
+      "param_the_temp": { "name": "Temperature" },
+      "param_water": { "name": "Water" }
     },
     "binary_sensor": {
       "is_busy": { "name": "Busy" },

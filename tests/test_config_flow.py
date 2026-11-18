@@ -5,6 +5,9 @@ Covers spec US1 (cloud login replaces manual device-map/DSN entry), US2
 discovery -> local connection), and US4 (graceful cloud-only fallback).
 """
 
+import json
+import os
+
 import pytest
 from custom_components.cremalink_ha import config_flow as cf_mod
 from custom_components.cremalink_ha.config_flow import (
@@ -16,6 +19,9 @@ from custom_components.cremalink_ha.const import (
     CONF_CONNECTION_TYPE,
     CONF_DEVICE_MAP,
     CONF_DSN,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_TOKEN_FILE,
     CONNECTION_CLOUD,
     CONNECTION_LOCAL,
     DOMAIN,
@@ -257,6 +263,44 @@ class TestAdvertisedIPOptionsFlow:
         assert result["type"] == "form"
         assert result["errors"]["base"] == "invalid_advertised_ip"
 
+    async def test_options_login_stores_token_file_never_password(self, hass):
+        flow = self._make_options_flow(hass, data={CONF_DSN: "DSN1"})
+
+        result = await flow.async_step_init(
+            {CONF_ADVERTISED_IP: "", CONF_EMAIL: "a@b.com", CONF_PASSWORD: "pw"}
+        )
+
+        assert result["type"] == "create_entry"
+        token_file = result["data"][CONF_TOKEN_FILE]
+        assert token_file.endswith("DSN1.json") and os.path.exists(token_file)
+        assert "pw" not in json.dumps(result["data"])
+        os.remove(token_file)
+
+    async def test_options_login_failure_shows_error(self, hass, monkeypatch):
+        def _boom(email, password):
+            raise ValueError("bad credentials")
+
+        monkeypatch.setattr(cf_mod, "authenticate_cloud", _boom)
+        flow = self._make_options_flow(hass, data={CONF_DSN: "DSN1"})
+
+        result = await flow.async_step_init(
+            {CONF_EMAIL: "a@b.com", CONF_PASSWORD: "wrong"}
+        )
+
+        assert result["type"] == "form"
+        assert result["errors"]["base"] == "auth_failed"
+
+    async def test_options_keep_existing_token_without_credentials(self, hass):
+        flow = self._make_options_flow(
+            hass,
+            data={CONF_DSN: "DSN1"},
+            options={CONF_TOKEN_FILE: "/config/cremalink_tokens/DSN1.json"},
+        )
+
+        result = await flow.async_step_init({CONF_ADVERTISED_IP: "192.168.178.96"})
+
+        assert result["data"][CONF_TOKEN_FILE] == "/config/cremalink_tokens/DSN1.json"
+
     async def test_cloud_options_are_not_supported(self, hass):
         flow = self._make_options_flow(hass, connection_type=CONNECTION_CLOUD)
 
@@ -323,6 +367,12 @@ class TestLocalConnectionCompletion:
         # No add-on required (spec 002-embedded-local-server, FR-003/FR-004)
         assert "addon_url" not in result["data"]
         assert result["data"]["connection_mode"] == "embedded"
+        # The refresh token (not the password) is kept for the cloud
+        # catalogue seed (research.md R11).
+        token_file = result["data"][CONF_TOKEN_FILE]
+        assert token_file.endswith("DSN1.json") and os.path.exists(token_file)
+        assert "pw" not in json.dumps(result["data"])
+        os.remove(token_file)
 
 
 class TestManualLocalSetup:

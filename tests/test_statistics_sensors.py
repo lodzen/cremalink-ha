@@ -1,10 +1,13 @@
 """Statistics sensors: native-source LAN gating + cloud-counter path (T022)."""
 
+import time
+
 from cremalink.ecam.statistics import (
     interpret,
     resolve_cloud_breakdowns,
     resolve_cloud_counters,
 )
+from custom_components.cremalink_ha import coordinator as coordinator_mod
 from custom_components.cremalink_ha import sensor as sensor_mod
 from custom_components.cremalink_ha.const import (
     CONF_CONNECTION_TYPE,
@@ -81,6 +84,63 @@ class TestNativeSource:
         _, entities = await _setup(hass)
         by_uid = {e.unique_id: e for e in entities}
         assert by_uid["entry1_stat_descales"].native_value is None
+
+    async def test_counters_stay_available_on_outage(self, hass):
+        """Once a report exists, a fetch outage must not flap the counter —
+        a lifetime value can only grow while the machine brews."""
+        coordinator, entities = await _setup(hass)
+        coordinator.statistics = interpret(
+            [(43010, 42)], source="native", complete=True
+        )
+        by_uid = {e.unique_id: e for e in entities}
+        sensor = by_uid["entry1_stat_total_beverages"]
+        # Monitor data gone + failures past the availability threshold.
+        coordinator.data = None
+        coordinator.consecutive_failures = coordinator.failure_threshold
+        assert sensor.available is True
+        assert sensor.native_value == 42
+        # Monitor sensors still follow the normal availability rules.
+        assert by_uid["entry1_status_name"].available is False
+
+    async def test_counters_unavailable_until_first_report(self, hass):
+        coordinator, entities = await _setup(hass)
+        coordinator.data = None
+        by_uid = {e.unique_id: e for e in entities}
+        assert by_uid["entry1_stat_total_beverages"].available is False
+
+    async def test_missing_entry_keeps_last_value(self, hass):
+        """A report without the id must not flap the counter back to the
+        startup-restored state — the machine drops ids while rewriting
+        its statistics table after a brew (observed: 625 ↔ 624 dips)."""
+        coordinator, entities = await _setup(hass)
+        coordinator.statistics = interpret(
+            [(43010, 625)], source="native", complete=True
+        )
+        sensor = {e.unique_id: e for e in entities}["entry1_stat_total_beverages"]
+        assert sensor.native_value == 625
+        coordinator.statistics = interpret([(106, 999)], source="native", complete=True)
+        assert sensor.native_value == 625
+
+    async def test_cloud_counter_missing_keeps_last_value(self, hass):
+        from cremalink.ecam.statistics import StatisticsReport
+
+        coordinator, entities = await _setup(
+            hass,
+            connection=CONNECTION_CLOUD,
+            statistics_source="cloud_counters",
+            statistics_datapoints=["d701_tot_bev_b"],
+        )
+        sensor = next(
+            e for e in entities if e.unique_id == "entry1_stat_total_beverages"
+        )
+        report = StatisticsReport(source="cloud_counters", complete=True)
+        report.cloud_counters = {"total_beverages": 7}
+        coordinator.statistics = report
+        assert sensor.native_value == 7
+        report2 = StatisticsReport(source="cloud_counters", complete=True)
+        report2.cloud_counters = {}
+        coordinator.statistics = report2
+        assert sensor.native_value == 7
 
 
 class TestCloudCounters:
@@ -182,3 +242,36 @@ class TestCoordinatorSlowLane:
         await coordinator._async_update_data()
         # No retry storm — unsupported transports are probed once.
         assert calls == [1]
+
+    async def test_ready_transition_schedules_a_statistics_fetch(self, hass):
+        """Brew end (status → ready) refreshes statistics after the settle
+        delay instead of waiting out the 5-minute lane."""
+        calls = []
+        report = interpret([(43010, 1)], source="native", complete=True)
+        device = make_device(
+            get_statistics=lambda: calls.append(1) or report,
+        )
+        busy = FakeMonitorData(status_name="preparing_milk", parsed={"status": 10})
+        ready = FakeMonitorData(status_name="ready", parsed={"status": 7})
+        coordinator, _ = await setup_entities(
+            hass, make_entry(), device, sensor_mod, busy
+        )
+        await coordinator._async_update_data()  # status: preparing_milk
+        assert coordinator._statistics_due_at is None
+        device.get_monitor = lambda: ready
+        await coordinator._async_update_data()  # transition → ready
+        assert coordinator._statistics_due_at is not None
+        # Interval would skip (just fetched), but the due fires anyway.
+        coordinator._statistics_due_at = 0
+        calls.clear()
+        await coordinator._async_update_data()
+        assert calls == [1]
+        # Staying at ready does not retrigger.
+        assert coordinator._statistics_due_at is None
+        calls.clear()
+        coordinator._statistics_fetched_at = (
+            time.monotonic() - coordinator_mod.STATISTICS_INTERVAL.total_seconds() - 1
+        )  # past the lane cadence
+        await coordinator._async_update_data()
+        assert calls == [1]  # normal cadence only
+        assert coordinator._statistics_due_at is None

@@ -30,6 +30,7 @@ class TestEntities:
         uids = {e.unique_id for e in entities}
         assert uids == {
             "entry1_power",
+            "entry1_brew_recipe",
             "entry1_setting_beep",
             "entry1_setting_energy_saving",
         }

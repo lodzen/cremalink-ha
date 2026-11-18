@@ -7,18 +7,32 @@
 """
 
 import logging
+import time
+from functools import partial
 
 from cremalink.ecam.settings import SETTING_BIT_MAPS
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES
+from .const import (
+    BUTTON_UNAVAILABLE_STATUSES,
+    CONF_CONNECTION_TYPE,
+    DOMAIN,
+    NOT_BREWING_STATUSES,
+    NOT_READY_STATUSES,
+    STANDBY_STATUSES,
+)
 from .coordinator import CremalinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+#: How long a wakeup/standby intent is held before the monitor's report
+#: wins again — ECAM wake-up incl. rinse can take ~a minute.
+_PENDING_SECONDS = 120
 
 #: Bit-setting switch definitions: (setting key, translation-key suffix,
 #: icon). The suffix doubles as the unique-id tail.
@@ -40,6 +54,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = data["coordinator"]
     device = data["device"]
     entities = [CremalinkPowerSwitch(coordinator, device, entry)]
+    session = data.get("recipe_session")
+    if session is not None:
+        entities.append(CremalinkBrewSwitch(coordinator, device, session, entry))
     capabilities = getattr(device, "capabilities", {}) or {}
     for key, suffix, icon in SETTING_SWITCHES:
         setting = SETTING_BIT_MAPS[key]
@@ -82,17 +99,31 @@ class CremalinkPowerSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity
             name=entry.title,
             manufacturer="cremalink",
         )
+        self._pending: tuple[bool, float] | None = None
 
     @property
     def is_on(self):
-        """Return true if the switch is on."""
-        if not self.coordinator.data or not self.coordinator.data.status_name:
+        """Return true if the switch is on.
+
+        A wakeup/standby transition takes a while on the machine (wake
+        incl. rinse can run ~a minute): the monitor still reports
+        ``in_standby`` right after the command lands, which flipped the
+        switch straight back. The intended state is held until the
+        monitor confirms it or the pending window expires.
+        """
+        status = (getattr(self.coordinator.data, "status_name", "") or "").lower()
+        if self._pending is not None:
+            target, since = self._pending
+            if not status:
+                return target
+            awake = status not in ("standby", "in_standby")
+            if awake == target or time.monotonic() - since >= _PENDING_SECONDS:
+                self._pending = None
+            else:
+                return target
+        if not status:
             return None
-        # Check if the status indicates the device is not in standby
-        return self.coordinator.data.status_name.lower() not in [
-            "standby",
-            "in_standby",
-        ]
+        return status not in ("standby", "in_standby")
 
     @property
     def available(self):
@@ -104,20 +135,28 @@ class CremalinkPowerSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity
     async def async_turn_on(self, **kwargs):
         """Turn the switch on."""
         await self.hass.async_add_executor_job(self.device.do, "wakeup")
+        self._pending = (True, time.monotonic())
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs):
         """Turn the switch off."""
         await self.hass.async_add_executor_job(self.device.do, "standby")
+        self._pending = (False, time.monotonic())
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
 
-class CremalinkSettingSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity):
+class CremalinkSettingSwitch(
+    CoordinatorEntity[CremalinkCoordinator], SwitchEntity, RestoreEntity
+):
     """A boolean flag inside the shared param-63 user-config word.
 
     Writes go through ``Device.set_setting_bit``: the current word is read
     first and the flag merged in, so unrelated bits survive (protocol.md
-    §14.8). State only ever reflects machine-confirmed values.
+    §14.8). State only ever reflects machine-confirmed values —
+    ``RestoreEntity`` keeps the last confirmed state visible across a
+    restart when standby blocks the re-read; a successful fetch wins.
     """
 
     _attr_entity_category = EntityCategory.CONFIG
@@ -149,6 +188,12 @@ class CremalinkSettingSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEnti
             name=entry.title,
             manufacturer="cremalink",
         )
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state in ("on", "off"):
+            self._is_on = last.state == "on"
 
     @property
     def is_on(self):
@@ -230,3 +275,94 @@ class CremalinkSettingSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEnti
     async def async_turn_off(self, **kwargs):
         """Turn the setting off."""
         await self._async_set(False)
+
+
+class CremalinkBrewSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity):
+    """One entity for brew + stop — the recipe stays in ``select.recipe``.
+
+    ON while the monitor reports a brewing action — also when the brew
+    was started at the machine's own panel. ``turn_on`` sends the
+    session's effective values (stored + pending overrides) in one
+    ``0x83`` frame via ``device.brew`` — transient, never persisted;
+    ``turn_off`` sends ``stop`` (a ``beverage_id`` command,
+    action=STOPV2), harmless when idle. Replaces the former
+    ``button.brew_recipe`` + ``button.cmd_stop`` pair.
+    """
+
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, device, session, entry):
+        super().__init__(coordinator)
+        self.device = device
+        self.session = session
+        self._attr_translation_key = "brew_recipe"
+        self._attr_unique_id = f"{entry.entry_id}_brew_recipe"
+        self._attr_icon = "mdi:coffee"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="cremalink",
+        )
+
+    def _brewing(self):
+        """Monitor says a brewing action is running (same rule the drink
+        buttons used): non-standby status + the busy/action byte set."""
+        data = self.coordinator.data
+        return bool(
+            data
+            and data.status_name is not None
+            and data.status_name not in NOT_BREWING_STATUSES
+            and data.is_busy
+        )
+
+    @property
+    def is_on(self):
+        data = self.coordinator.data
+        if not data or data.status_name is None:
+            return None
+        return self._brewing()
+
+    @property
+    def available(self):
+        """Stoppable while brewing; brewable when the machine is ready
+        and the session holds a loaded recipe (spec clarification Q3)."""
+        data = self.coordinator.data
+        if not super().available or not data or data.status_name is None:
+            return False
+        if self._brewing():
+            return True
+        if data.status_name in BUTTON_UNAVAILABLE_STATUSES:
+            return False
+        return self.session.ready
+
+    async def async_turn_on(self, **kwargs):
+        data = self.coordinator.data
+        if data:
+            if data.status_name in NOT_READY_STATUSES:
+                raise HomeAssistantError("The machine is not ready; turn it on first.")
+            if data.is_busy:
+                raise HomeAssistantError("The machine is busy; wait until it is ready.")
+        beverage_id = self.session.selected_beverage
+        if beverage_id is None:
+            raise HomeAssistantError("Select a recipe first.")
+        # `available` is UI-only — a service call must not brew with
+        # params that are missing, loading, or scoped to a stale
+        # recipe/profile (US5).
+        if not self.session.ready:
+            raise HomeAssistantError(
+                "Recipe parameters are not loaded yet for the selected "
+                "recipe/profile — wait for them to appear, then brew."
+            )
+        await self.hass.async_add_executor_job(
+            partial(
+                self.device.brew,
+                beverage_id,
+                overrides=dict(self.session.overrides),
+                params=self.session.params,
+            )
+        )
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs):
+        await self.hass.async_add_executor_job(self.device.do, "stop")
+        await self.coordinator.async_request_refresh()

@@ -5,7 +5,7 @@ description = "Cremalink for Home-Assistant Add-on & Integration"
 requires-python = ">=3.13.2"
 dependencies = [
     "homeassistant>=2026.2.3",
-    "cremalink-lodzen==2.0.0.dev5"
+    "cremalink-lodzen==2.0.0.dev7"
 ]
 
 [dependency-groups]
@@ -20,6 +20,12 @@ docs = [
 # that intentionally violate the real protocols — not worth annotating.
 # docs/source/conf.py is a Sphinx build script that mocks HA imports.
 exclude = ["tests", "docs"]
+
+[tool.ty.environment]
+# Local dev installs cremalink editable from the sibling repo — ty cannot
+# follow editable .pth finders, so the source tree is a search root too.
+# In CI cremalink is pip-installed into site-packages; the root is a no-op.
+root = [".", "../cremalink"]
 
 [tool.ty.rules]
 # HA entities override writable cached_property attributes (is_on,

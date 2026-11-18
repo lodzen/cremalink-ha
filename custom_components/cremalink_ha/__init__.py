@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from functools import partial
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers import translation
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from cremalink import (
     Client,
@@ -41,8 +43,10 @@ from .const import (
     DEVICE_NAME,
     DOMAIN,
     REPAIR_RECONFIGURE_REQUIRED,
+    catalog_ready_signal,
 )
 from .coordinator import CremalinkCoordinator
+from .recipe_session import RecipeSession
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,6 +56,7 @@ PLATFORMS = [
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
     Platform.SELECT,
+    Platform.NUMBER,
 ]
 
 #: Belt-and-suspenders bound on top of embedded.py's own site shutdown_timeout --
@@ -214,6 +219,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 advertised_ip=advertised_ip,
                 monitor_poll_interval=DEFAULT_MONITOR_POLL_INTERVAL,
                 nudger_poll_interval=DEFAULT_NUDGER_POLL_INTERVAL,
+                # Cloud-side session recovery: when local_reg keeps failing
+                # (machine's LAN module down), the server announces
+                # device_connected via the Ayla cloud channel — the same
+                # write the app uses (research.md R17). No token → skipped.
+                cloud_token_path=entry.options.get(CONF_TOKEN_FILE)
+                or entry.data.get(CONF_TOKEN_FILE),
                 event_logger=_LOGGER,
             )
             await embedded_server.start()
@@ -291,6 +302,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
         "device": device,
         "embedded_server": embedded_server,
+        "recipe_session": RecipeSession(device),
     }
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
@@ -307,7 +319,67 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_create_background_task(
         hass, coordinator.async_refresh(), f"{DOMAIN}_{entry.entry_id}_first_refresh"
     )
+    if connection_type == CONNECTION_LOCAL:
+        entry.async_create_background_task(
+            hass,
+            _async_preload_catalog(hass, entry, device, dsn),
+            f"{DOMAIN}_{entry.entry_id}_cloud_catalog",
+        )
     return True
+
+
+async def _async_preload_catalog(
+    hass: HomeAssistant, entry: ConfigEntry, device, dsn: str
+) -> None:
+    """Seed the recipe catalogue from ONE cloud request (the app's store sync).
+
+    Coffee Link fills its property store with a single cloud
+    ``properties.json`` fetch and never queries recipes per machine
+    (research.md R11). Over LAN every named GET costs a ~1.3 s slot on
+    the machine's one-payload-per-poll lane (protocol.md §14.12), so the
+    cloud snapshot supplies the factory descriptors and menu orders for
+    free. Optional: without a stored cloud token — or on any cloud
+    failure — the library's lazy LAN reads (one GET per use, cached)
+    remain the backup, so nothing here may raise.
+    """
+    token_file = entry.options.get(CONF_TOKEN_FILE) or entry.data.get(CONF_TOKEN_FILE)
+    if not token_file:
+        _LOGGER.debug(
+            "Cloud catalogue preload skipped: no cloud token stored for %s", dsn
+        )
+        return
+
+    def _fetch_and_seed() -> tuple[int, int]:
+        client = Client(token_file, logger=_LOGGER)
+        properties = client.fetch_properties(dsn)
+        seeded = device.seed_catalog_from_properties(properties)
+        return len(properties), seeded
+
+    try:
+        started = time.monotonic()
+        fetched, seeded = await hass.async_add_executor_job(_fetch_and_seed)
+    except Exception as err:  # noqa: BLE001 - any failure falls back to LAN reads
+        _LOGGER.info(
+            "Cloud catalogue unavailable (%s); using lazy LAN reads", type(err).__name__
+        )
+        _LOGGER.debug("Cloud catalogue preload failed for %s: %r", dsn, err)
+        return
+    _LOGGER.debug(
+        "Cloud catalogue seeded %d recipe descriptors from %d cloud "
+        "properties in %.1f s (descriptors + menu orders now cached; "
+        "recipe values stay live reads)",
+        seeded,
+        fetched,
+        time.monotonic() - started,
+    )
+    if seeded:
+        async_dispatcher_send(hass, catalog_ready_signal(entry.entry_id))
+        _LOGGER.debug("Cloud catalogue ready signal dispatched")
+    else:
+        _LOGGER.debug(
+            "Cloud catalogue seed produced 0 descriptors — lazy LAN reads "
+            "remain the fallback"
+        )
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:

@@ -36,6 +36,13 @@ DEFAULT_NUDGER_POLL_INTERVAL = 1
 CONF_CONNECTION_MODE = "connection_mode"
 CONNECTION_MODE_EMBEDDED = "embedded"
 CONF_ADVERTISED_IP = "advertised_ip"
+
+
+def catalog_ready_signal(entry_id: str) -> str:
+    """Dispatcher signal: the cloud catalogue snapshot was seeded."""
+    return f"{DOMAIN}_catalog_ready_{entry_id}"
+
+
 DEFAULT_LOCAL_SERVER_PORT = 10280
 LOCAL_SERVER_PORT_FALLBACK_RANGE = 50
 REPAIR_RECONFIGURE_REQUIRED = "reconfigure_required"

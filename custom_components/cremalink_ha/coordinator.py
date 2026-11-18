@@ -11,7 +11,7 @@ from cremalink.ecam.settings import SETTING_BIT_MAPS, SETTING_OPTION_MAPS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
+from .const import DOMAIN, STANDBY_STATUSES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +21,12 @@ SCAN_INTERVAL_SLOW = timedelta(seconds=30)
 #: Slow-lane statistics fetch cadence (minutes-scale per spec R10 — the
 #: 0xA2 paging session and cloud property snapshots do not need fast polls).
 STATISTICS_INTERVAL = timedelta(minutes=5)
+
+#: Delay between a status transition into ``ready`` (a brew/hot-water/
+#: cleaning cycle just ended) and a statistics refresh — the machine
+#: commits its 0xA2 counters at pour end, so an immediate read can still
+#: see the pre-commit table.
+STATISTICS_BREW_SETTLE_SECONDS = 10.0
 
 #: Settings tracking cadence. Panel-side changes republish the backing
 #: ``dNNN`` datapoint within ~6 s of a ``request_property`` GET
@@ -86,6 +92,10 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
         # cadence, not on every monitor poll.
         self.statistics = None
         self._statistics_fetched_at: float | None = None
+        #: monotonic deadline for an event-driven statistics fetch — set
+        #: when the monitor transitions into ``ready`` after a work cycle.
+        self._statistics_due_at: float | None = None
+        self._prev_status_name: str | None = None
         # None = unknown yet, True/False once the first fetch resolved.
         self.statistics_supported: bool | None = None
         # Read-failure retention (T045/FR-035).
@@ -148,12 +158,14 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
         Other errors keep the previous report.
         """
         now = time.monotonic()
-        if (
+        due = self._statistics_due_at is not None and now >= self._statistics_due_at
+        if not due and (
             self._statistics_fetched_at is not None
             and now - self._statistics_fetched_at < STATISTICS_INTERVAL.total_seconds()
         ):
             return
         self._statistics_fetched_at = now
+        self._statistics_due_at = None
         if self.statistics_supported is False:
             return
         get_statistics = getattr(self.device, "get_statistics", None)
@@ -208,6 +220,7 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
                         "warnings": getattr(snapshot, "warnings", []),
                         "errors": getattr(snapshot, "errors", []),
                     },
+                    level=logging.DEBUG,
                 )
 
             if (
@@ -222,6 +235,27 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
                 elif status is not None:
                     self.update_interval = SCAN_INTERVAL_FAST
 
+            status_name = getattr(data, "status_name", None)
+            if (
+                self._prev_status_name is not None
+                and self._prev_status_name != status_name
+                and status_name == "ready"
+            ):
+                # A work cycle (brew/hot water/milk/cleaning) just ended —
+                # refresh statistics shortly after instead of waiting out
+                # the 5-minute lane (user-observed: counter lagged minutes).
+                self._statistics_due_at = (
+                    time.monotonic() + STATISTICS_BREW_SETTLE_SECONDS
+                )
+            self._prev_status_name = status_name
+            asleep = status_name in STANDBY_STATUSES
+            if self.embedded_server is not None:
+                # Tells the monitor/nudger jobs to drop to standby
+                # cadence — polling a sleeping machine every few
+                # seconds only produces noise (live-observed ~330
+                # requests / 4 min after standby).
+                self.embedded_server.set_machine_asleep(asleep)
+
             self.consecutive_failures = 0
             if not self._first_update_done:
                 # First cycle after (re)start: return the monitor now.
@@ -233,10 +267,17 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
                 # still None).
                 self._first_update_done = True
                 return data
+            if asleep:
+                # Standby: profile/settings/statistics cannot change
+                # while asleep (panel off, writes need an announced
+                # session). Skipping the queued reads — together with
+                # the server jobs' standby cadence — keeps the sleeping
+                # machine quiet. The monitor snapshot above still flows
+                # so entities keep their standby-state values.
+                return data
             # Param-0x03EE profile readback (T055, protocol.md §5/§14.8):
             # track the machine's own selected profile so the select
-            # entity follows panel-side changes. Runs in standby too —
-            # the machine answered 0xA2 reads while in_standby — and the
+            # entity follows panel-side changes. Skipped in standby; the
             # device self-throttles; failures must not flap the refresh.
             refresh_profile = getattr(self.device, "refresh_current_profile", None)
             if refresh_profile is not None:

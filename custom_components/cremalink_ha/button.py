@@ -1,7 +1,10 @@
 """Button platform for the Cremalink integration."""
 
+import logging
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -14,6 +17,8 @@ from .const import (
     TRANSLATED_COMMANDS,
 )
 from .coordinator import CremalinkCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -31,11 +36,33 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # Get available commands from the device
     cmds = await hass.async_add_executor_job(device.get_commands)
 
+    command_map = getattr(device, "command_map", {}) or {}
+    kept: list[str] = []
     entities = []
     for cmd in cmds:
         # Filter out power commands as they might be handled elsewhere
-        if cmd.lower() not in ["wakeup", "standby", "refresh"]:
-            entities.append(CremalinkButton(coordinator, device, cmd, entry))
+        if cmd.lower() in ["wakeup", "standby", "refresh"]:
+            continue
+        # Beverage commands move to select.recipe + switch.brew_recipe
+        # (spec FR-004/FR-018). ``stop`` is a beverage_id entry too
+        # (action=STOPV2) — turn_off on the brew switch sends it.
+        if "beverage_id" in (command_map.get(cmd) or {}):
+            continue
+        kept.append(cmd)
+        entities.append(CremalinkButton(coordinator, device, cmd, entry))
+
+    # Sweep orphaned button registry entries: per-drink buttons removed in
+    # favour of select.recipe + switch.brew_recipe would otherwise linger
+    # as unavailable rows forever (any cmd button not recreated this run —
+    # also covers drinks dropped from a changed custom device map, and the
+    # retired button.brew_recipe/button.cmd_stop).
+    ent_reg = er.async_get(hass)
+    keep_uids = {f"{entry.entry_id}_cmd_{cmd}" for cmd in kept}
+    for reg in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
+        if reg.domain == "button" and reg.unique_id not in keep_uids:
+            _LOGGER.info("Removing stale button entity %s", reg.entity_id)
+            ent_reg.async_remove(reg.entity_id)
+
     async_add_entities(entities)
 
 
