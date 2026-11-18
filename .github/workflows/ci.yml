@@ -67,6 +67,11 @@ jobs:
       run: .venv/bin/ruff check .
     - name: Ruff format check
       run: .venv/bin/ruff format --check .
+    - name: Point ty's sibling root at the source clone
+      # pyproject.toml [tool.ty.environment] root includes ../cremalink for
+      # local editable installs; ty aborts when a root path is missing, so
+      # the $RUNNER_TEMP clone has to sit where the config expects it.
+      run: ln -sfn "$RUNNER_TEMP/cremalink" "$GITHUB_WORKSPACE/../cremalink"
     - name: Type check with ty
       run: .venv/bin/ty check .
       env:
