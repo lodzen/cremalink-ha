@@ -22,6 +22,12 @@ SCAN_INTERVAL_SLOW = timedelta(seconds=30)
 #: 0xA2 paging session and cloud property snapshots do not need fast polls).
 STATISTICS_INTERVAL = timedelta(minutes=5)
 
+#: Delay between a status transition into ``ready`` (a brew/hot-water/
+#: cleaning cycle just ended) and a statistics refresh — the machine
+#: commits its 0xA2 counters at pour end, so an immediate read can still
+#: see the pre-commit table.
+STATISTICS_BREW_SETTLE_SECONDS = 10.0
+
 #: Settings tracking cadence. Panel-side changes republish the backing
 #: ``dNNN`` datapoint within ~6 s of a ``request_property`` GET
 #: (protocol.md §14.11); 15 s keeps HA state close to the machine without
@@ -86,6 +92,10 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
         # cadence, not on every monitor poll.
         self.statistics = None
         self._statistics_fetched_at: float | None = None
+        #: monotonic deadline for an event-driven statistics fetch — set
+        #: when the monitor transitions into ``ready`` after a work cycle.
+        self._statistics_due_at: float | None = None
+        self._prev_status_name: str | None = None
         # None = unknown yet, True/False once the first fetch resolved.
         self.statistics_supported: bool | None = None
         # Read-failure retention (T045/FR-035).
@@ -148,12 +158,14 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
         Other errors keep the previous report.
         """
         now = time.monotonic()
-        if (
+        due = self._statistics_due_at is not None and now >= self._statistics_due_at
+        if not due and (
             self._statistics_fetched_at is not None
             and now - self._statistics_fetched_at < STATISTICS_INTERVAL.total_seconds()
         ):
             return
         self._statistics_fetched_at = now
+        self._statistics_due_at = None
         if self.statistics_supported is False:
             return
         get_statistics = getattr(self.device, "get_statistics", None)
@@ -224,6 +236,18 @@ class CremalinkCoordinator(DataUpdateCoordinator[MonitorView]):
                     self.update_interval = SCAN_INTERVAL_FAST
 
             status_name = getattr(data, "status_name", None)
+            if (
+                self._prev_status_name is not None
+                and self._prev_status_name != status_name
+                and status_name == "ready"
+            ):
+                # A work cycle (brew/hot water/milk/cleaning) just ended —
+                # refresh statistics shortly after instead of waiting out
+                # the 5-minute lane (user-observed: counter lagged minutes).
+                self._statistics_due_at = (
+                    time.monotonic() + STATISTICS_BREW_SETTLE_SECONDS
+                )
+            self._prev_status_name = status_name
             asleep = status_name in STANDBY_STATUSES
             if self.embedded_server is not None:
                 # Tells the monitor/nudger jobs to drop to standby

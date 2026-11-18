@@ -220,6 +220,11 @@ class _StatisticsSensorBase(_CremalinkEntityBase, RestoreEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
         self._restored = None
+        #: Last real reading — seeds from _restored, then follows every
+        #: report that carries the counter. A report missing the entry
+        #: (the machine drops an id while rewriting its table after a
+        #: brew) must not flap the value back to the startup state.
+        self._last_value = None
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -231,6 +236,7 @@ class _StatisticsSensorBase(_CremalinkEntityBase, RestoreEntity):
             self._restored = int(value) if value.is_integer() else value
         except ValueError:
             self._restored = last.state  # e.g. descale_status text readings
+        self._last_value = self._restored
 
     @property
     def available(self):
@@ -258,9 +264,11 @@ class CremalinkStatisticSensor(_StatisticsSensorBase, SensorEntity):
     def native_value(self):
         report = getattr(self.coordinator, "statistics", None)
         if report is None:
-            return self._restored
+            return self._last_value
         entry = report.entries.get(self._a2_id)
-        return entry.value if entry is not None else self._restored
+        if entry is not None:
+            self._last_value = entry.value
+        return self._last_value
 
 
 class CremalinkCloudCounterSensor(_StatisticsSensorBase, SensorEntity):
@@ -282,9 +290,11 @@ class CremalinkCloudCounterSensor(_StatisticsSensorBase, SensorEntity):
     def native_value(self):
         report = getattr(self.coordinator, "statistics", None)
         if report is None:
-            return self._restored
+            return self._last_value
         value = report.cloud_counters.get(self._logical)
-        return value if value is not None else self._restored
+        if value is not None:
+            self._last_value = value
+        return self._last_value
 
     @property
     def extra_state_attributes(self):
