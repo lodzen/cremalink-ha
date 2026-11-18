@@ -1,10 +1,13 @@
 """Statistics sensors: native-source LAN gating + cloud-counter path (T022)."""
 
+import time
+
 from cremalink.ecam.statistics import (
     interpret,
     resolve_cloud_breakdowns,
     resolve_cloud_counters,
 )
+from custom_components.cremalink_ha import coordinator as coordinator_mod
 from custom_components.cremalink_ha import sensor as sensor_mod
 from custom_components.cremalink_ha.const import (
     CONF_CONNECTION_TYPE,
@@ -113,13 +116,9 @@ class TestNativeSource:
         coordinator.statistics = interpret(
             [(43010, 625)], source="native", complete=True
         )
-        sensor = {e.unique_id: e for e in entities}[
-            "entry1_stat_total_beverages"
-        ]
+        sensor = {e.unique_id: e for e in entities}["entry1_stat_total_beverages"]
         assert sensor.native_value == 625
-        coordinator.statistics = interpret(
-            [(106, 999)], source="native", complete=True
-        )
+        coordinator.statistics = interpret([(106, 999)], source="native", complete=True)
         assert sensor.native_value == 625
 
     async def test_cloud_counter_missing_keeps_last_value(self, hass):
@@ -270,7 +269,9 @@ class TestCoordinatorSlowLane:
         # Staying at ready does not retrigger.
         assert coordinator._statistics_due_at is None
         calls.clear()
-        coordinator._statistics_fetched_at = 0  # past the lane cadence
+        coordinator._statistics_fetched_at = (
+            time.monotonic() - coordinator_mod.STATISTICS_INTERVAL.total_seconds() - 1
+        )  # past the lane cadence
         await coordinator._async_update_data()
         assert calls == [1]  # normal cadence only
         assert coordinator._statistics_due_at is None
