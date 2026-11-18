@@ -1,0 +1,266 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.recipe_session &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.recipe_session</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.recipe_session</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Per-entry brew-parameter session state.</span>
+
+<span class="sd">One ``RecipeSession`` per config entry, shared by the recipe select, the</span>
+<span class="sd">parameter number entities, and the brew button. Holds the selected</span>
+<span class="sd">beverage, the loaded :class:`~cremalink.domain.device.RecipeParams`, and</span>
+<span class="sd">the user's pending raw overrides — all transient per spec (no persistence,</span>
+<span class="sd">cleared on recipe/profile change so nothing leaks across recipes).</span>
+
+<span class="sd">Machine I/O never happens here directly: ``async_ensure_params`` schedules</span>
+<span class="sd">the library's blocking ``recipe_params`` read on the executor exactly</span>
+<span class="sd">once per (recipe, profile) pair; entities watch ``loading``/``params``.</span>
+<span class="sd">"""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">STANDBY_STATUSES</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.domain.device</span><span class="w"> </span><span class="kn">import</span> <span class="n">Device</span><span class="p">,</span> <span class="n">RecipeParams</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistant</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
+
+<span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1">#: Minimum seconds between failed param-load attempts — a standby or</span>
+<span class="c1">#: otherwise unanswering machine must not be flooded with republish</span>
+<span class="c1">#: requests on every coordinator poll.</span>
+<span class="n">LOAD_RETRY_INTERVAL</span> <span class="o">=</span> <span class="mf">60.0</span>
+
+
+<div class="viewcode-block" id="RecipeSession">
+<a class="viewcode-back" href="../../api/cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">RecipeSession</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Selected beverage + loaded params + pending overrides for one entry."""</span>
+
+    <span class="n">device</span><span class="p">:</span> <span class="s2">"Device"</span>
+    <span class="n">selected_beverage</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">params</span><span class="p">:</span> <span class="s2">"RecipeParams | None"</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">overrides</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">loading</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">_profile_seen</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">_load_task</span><span class="p">:</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Task</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">_last_attempt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<div class="viewcode-block" id="RecipeSession.select">
+<a class="viewcode-back" href="../../api/cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.select">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">beverage_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Select a recipe — discards the previous recipe's values/overrides."""</span>
+        <span class="k">if</span> <span class="n">beverage_id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span> <span class="o">=</span> <span class="n">beverage_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">overrides</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_attempt</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># a new selection retries immediately</span></div>
+
+
+<div class="viewcode-block" id="RecipeSession.clear">
+<a class="viewcode-back" href="../../api/cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.clear">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">clear</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Drop the selection entirely (values and overrides with it)."""</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">overrides</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="RecipeSession.set_override">
+<a class="viewcode-back" href="../../api/cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.set_override">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_override</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">param_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">raw_value</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Record a pending override (raw machine units)."""</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">overrides</span><span class="p">[</span><span class="n">param_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_value</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_profile_changed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""True once, when the device's active profile differs from the last</span>
+<span class="sd">        successful load's scope — stale values/overrides are discarded."""</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="s2">"current_profile"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">current</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_profile_seen</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_profile_seen</span> <span class="o">=</span> <span class="n">current</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ready</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Params loaded for the *current* ``(beverage, profile)`` pair.</span>
+
+<span class="sd">        ``_profile_changed`` only clears ``params`` when</span>
+<span class="sd">        ``async_ensure_params`` next runs — between a profile change and</span>
+<span class="sd">        the next coordinator cycle the stale values would otherwise stay</span>
+<span class="sd">        brewable/editable. ``ready`` is instantaneous: it compares the</span>
+<span class="sd">        loaded params' scope to the live selection and profile. The</span>
+<span class="sd">        profile comparison mirrors the brew-side resolution</span>
+<span class="sd">        (``current_profile or 1`` in ``Device.recipe_params``/``brew``)</span>
+<span class="sd">        so an unasserted profile (0) means slot 1, not "never ready".</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">loading</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">beverage_id</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">current</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="s2">"current_profile"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span><span class="o">.</span><span class="n">profile_slot</span> <span class="o">==</span> <span class="n">current</span>
+
+<div class="viewcode-block" id="RecipeSession.async_ensure_params">
+<a class="viewcode-back" href="../../api/cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.async_ensure_params">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_ensure_params</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">hass</span><span class="p">:</span> <span class="s2">"HomeAssistant"</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">:</span> <span class="s2">"CremalinkCoordinator"</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Load the selected recipe's params once on the executor.</span>
+
+<span class="sd">        Re-arms on recipe or profile change (params cleared → reload).</span>
+<span class="sd">        While a load is in flight ``loading`` stays True — controls and</span>
+<span class="sd">        the brew action are blocked until the machine confirms values</span>
+<span class="sd">        (spec clarification Q3).</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_profile_changed</span><span class="p">()</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">overrides</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">loading</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">STANDBY_STATUSES</span><span class="p">:</span>
+            <span class="c1"># A standby machine serves no datapoint republishes — defer</span>
+            <span class="c1"># the load instead of flooding it with doomed GETs.</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_last_attempt</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_attempt</span> <span class="o">&lt;</span> <span class="n">LOAD_RETRY_INTERVAL</span>
+        <span class="p">):</span>
+            <span class="k">return</span>  <span class="c1"># backoff after a failed attempt — no per-poll retries</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">loading</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_load_task</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_load</span><span class="p">(</span><span class="n">coordinator</span><span class="p">))</span></div>
+
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">:</span> <span class="s2">"CremalinkCoordinator"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">beverage_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span>
+        <span class="k">if</span> <span class="n">beverage_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>  <span class="c1"># unselected between ensure() and task start</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">loading</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">return</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">params</span> <span class="o">=</span> <span class="k">await</span> <span class="n">coordinator</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+                <span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">recipe_params</span><span class="p">,</span> <span class="n">beverage_id</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="c1"># A recipe switch mid-flight must not accept stale values.</span>
+            <span class="k">if</span> <span class="n">beverage_id</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">selected_beverage</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"recipe params load failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">beverage_id</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_last_attempt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">loading</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">await</span> <span class="n">coordinator</span><span class="o">.</span><span class="n">async_request_refresh</span><span class="p">()</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

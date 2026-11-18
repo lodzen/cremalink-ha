@@ -242,6 +242,7 @@
                         <span class="p">{</span><span class="s2">"error_type"</span><span class="p">:</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">},</span>
                         <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
                     <span class="p">)</span>
+                    <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"cloud login failed: </span><span class="si">%.300s</span><span class="s2">"</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
                     <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auth_failed"</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span> <span class="o">=</span> <span class="n">temp_file</span>
@@ -378,9 +379,15 @@
                 <span class="n">CONF_LAN_KEY</span><span class="p">:</span> <span class="n">lan</span><span class="p">[</span><span class="s2">"lanip_key"</span><span class="p">],</span>
                 <span class="n">CONF_DEVICE_IP</span><span class="p">:</span> <span class="n">lan</span><span class="p">[</span><span class="s2">"lan_ip"</span><span class="p">],</span>
             <span class="p">}</span>
-            <span class="c1"># Local connection doesn't need the cloud refresh token — discard it.</span>
+            <span class="c1"># Keep the refresh token (never the password) so the recipe</span>
+            <span class="c1"># catalogue can be seeded from one cloud request like the app</span>
+            <span class="c1"># does (research.md R11); the local connection itself never</span>
+            <span class="c1"># uses it, and a missing/expired token only costs the optimisation.</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">):</span>
-                <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">)</span>
+                <span class="n">token_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">TOKEN_DIR</span><span class="p">)</span>
+                <span class="n">final_token_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dsn</span><span class="si">}</span><span class="s2">.json"</span><span class="p">)</span>
+                <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cloud_token_file</span><span class="p">,</span> <span class="n">final_token_path</span><span class="p">)</span>
+                <span class="n">data</span><span class="p">[</span><span class="n">CONF_TOKEN_FILE</span><span class="p">]</span> <span class="o">=</span> <span class="n">final_token_path</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">token_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">TOKEN_DIR</span><span class="p">)</span>
             <span class="n">final_token_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dsn</span><span class="si">}</span><span class="s2">.json"</span><span class="p">)</span>
@@ -728,6 +735,13 @@
                 <span class="n">advertised_ip</span> <span class="o">=</span> <span class="kc">None</span>
                 <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"invalid_advertised_ip"</span>
 
+            <span class="n">token_file</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_TOKEN_FILE</span><span class="p">)</span>
+            <span class="n">email</span><span class="p">,</span> <span class="n">password</span> <span class="o">=</span> <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_EMAIL</span><span class="p">),</span> <span class="n">user_input</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_PASSWORD</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span> <span class="ow">and</span> <span class="n">email</span> <span class="ow">and</span> <span class="n">password</span><span class="p">:</span>
+                <span class="n">token_file</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_async_save_cloud_token</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">password</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">token_file</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">errors</span><span class="p">[</span><span class="s2">"base"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auth_failed"</span>
+
             <span class="k">if</span> <span class="ow">not</span> <span class="n">errors</span><span class="p">:</span>
                 <span class="n">options</span> <span class="o">=</span> <span class="p">{}</span>
                 <span class="k">if</span> <span class="n">CONF_ADVERTISED_IP</span> <span class="ow">in</span> <span class="n">user_input</span><span class="p">:</span>
@@ -740,6 +754,8 @@
                     <span class="n">options</span><span class="p">[</span><span class="n">CONF_ADVERTISED_IP</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span>
                         <span class="n">CONF_ADVERTISED_IP</span>
                     <span class="p">]</span>
+                <span class="k">if</span> <span class="n">token_file</span><span class="p">:</span>
+                    <span class="n">options</span><span class="p">[</span><span class="n">CONF_TOKEN_FILE</span><span class="p">]</span> <span class="o">=</span> <span class="n">token_file</span>
                 <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_create_entry</span><span class="p">(</span>
                     <span class="n">title</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
                     <span class="n">data</span><span class="o">=</span><span class="n">options</span><span class="p">,</span>
@@ -759,11 +775,41 @@
                     <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span>
                         <span class="n">CONF_ADVERTISED_IP</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">current_advertised_ip</span>
                     <span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span><span class="n">CONF_EMAIL</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
+                    <span class="n">vol</span><span class="o">.</span><span class="n">Optional</span><span class="p">(</span><span class="n">CONF_PASSWORD</span><span class="p">):</span> <span class="nb">str</span><span class="p">,</span>
                 <span class="p">}</span>
             <span class="p">),</span>
             <span class="n">errors</span><span class="o">=</span><span class="n">errors</span><span class="p">,</span>
         <span class="p">)</span></div>
-</div>
+
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_save_cloud_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">email</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">password</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Log in once and keep only the refresh token; ``None`` on failure.</span>
+
+<span class="sd">        The password is used transiently and never stored. The token enables</span>
+<span class="sd">        the one-request cloud catalogue seed (research.md R11).</span>
+<span class="sd">        """</span>
+        <span class="n">dsn</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">config_entry</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">CONF_DSN</span><span class="p">]</span>
+        <span class="n">token_dir</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">path</span><span class="p">(</span><span class="n">TOKEN_DIR</span><span class="p">)</span>
+        <span class="n">token_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dsn</span><span class="si">}</span><span class="s2">.json"</span><span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">_login</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">token</span> <span class="o">=</span> <span class="n">authenticate_cloud</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">password</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">token_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">token</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">token_path</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">token_path</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">_login</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 - any login failure → form error</span>
+            <span class="n">log_event</span><span class="p">(</span>
+                <span class="n">_LOGGER</span><span class="p">,</span>
+                <span class="s2">"cloud_login_failed"</span><span class="p">,</span>
+                <span class="p">{</span><span class="s2">"error_type"</span><span class="p">:</span> <span class="nb">type</span><span class="p">(</span><span class="n">err</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">},</span>
+                <span class="n">level</span><span class="o">=</span><span class="n">logging</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"cloud login failed (options flow): </span><span class="si">%.300s</span><span class="s2">"</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">err</span><span class="p">))</span>
+            <span class="k">return</span> <span class="kc">None</span></div>
 
 </pre></div>
 

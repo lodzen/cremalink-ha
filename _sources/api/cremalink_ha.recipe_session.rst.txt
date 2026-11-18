@@ -1,0 +1,7 @@
+cremalink\_ha.recipe\_session module
+====================================
+
+.. automodule:: cremalink_ha.recipe_session
+   :members:
+   :show-inheritance:
+   :undoc-members:

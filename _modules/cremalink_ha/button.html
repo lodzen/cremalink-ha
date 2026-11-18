@@ -78,8 +78,11 @@
   <h1>Source code for cremalink_ha.button</h1><div class="highlight"><pre>
 <span></span><span class="sd">"""Button platform for the Cremalink integration."""</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.button</span><span class="w"> </span><span class="kn">import</span> <span class="n">ButtonEntity</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistantError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">entity_registry</span> <span class="k">as</span> <span class="n">er</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
 
@@ -92,6 +95,8 @@
     <span class="n">TRANSLATED_COMMANDS</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
+
+<span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="async_setup_entry">
@@ -111,11 +116,33 @@
     <span class="c1"># Get available commands from the device</span>
     <span class="n">cmds</span> <span class="o">=</span> <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">device</span><span class="o">.</span><span class="n">get_commands</span><span class="p">)</span>
 
+    <span class="n">command_map</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"command_map"</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{}</span>
+    <span class="n">kept</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">entities</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">cmd</span> <span class="ow">in</span> <span class="n">cmds</span><span class="p">:</span>
         <span class="c1"># Filter out power commands as they might be handled elsewhere</span>
-        <span class="k">if</span> <span class="n">cmd</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"wakeup"</span><span class="p">,</span> <span class="s2">"standby"</span><span class="p">,</span> <span class="s2">"refresh"</span><span class="p">]:</span>
-            <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkButton</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">entry</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">cmd</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"wakeup"</span><span class="p">,</span> <span class="s2">"standby"</span><span class="p">,</span> <span class="s2">"refresh"</span><span class="p">]:</span>
+            <span class="k">continue</span>
+        <span class="c1"># Beverage commands move to select.recipe + switch.brew_recipe</span>
+        <span class="c1"># (spec FR-004/FR-018). ``stop`` is a beverage_id entry too</span>
+        <span class="c1"># (action=STOPV2) — turn_off on the brew switch sends it.</span>
+        <span class="k">if</span> <span class="s2">"beverage_id"</span> <span class="ow">in</span> <span class="p">(</span><span class="n">command_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}):</span>
+            <span class="k">continue</span>
+        <span class="n">kept</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkButton</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">cmd</span><span class="p">,</span> <span class="n">entry</span><span class="p">))</span>
+
+    <span class="c1"># Sweep orphaned button registry entries: per-drink buttons removed in</span>
+    <span class="c1"># favour of select.recipe + switch.brew_recipe would otherwise linger</span>
+    <span class="c1"># as unavailable rows forever (any cmd button not recreated this run —</span>
+    <span class="c1"># also covers drinks dropped from a changed custom device map, and the</span>
+    <span class="c1"># retired button.brew_recipe/button.cmd_stop).</span>
+    <span class="n">ent_reg</span> <span class="o">=</span> <span class="n">er</span><span class="o">.</span><span class="n">async_get</span><span class="p">(</span><span class="n">hass</span><span class="p">)</span>
+    <span class="n">keep_uids</span> <span class="o">=</span> <span class="p">{</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_cmd_</span><span class="si">{</span><span class="n">cmd</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">cmd</span> <span class="ow">in</span> <span class="n">kept</span><span class="p">}</span>
+    <span class="k">for</span> <span class="n">reg</span> <span class="ow">in</span> <span class="n">er</span><span class="o">.</span><span class="n">async_entries_for_config_entry</span><span class="p">(</span><span class="n">ent_reg</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">reg</span><span class="o">.</span><span class="n">domain</span> <span class="o">==</span> <span class="s2">"button"</span> <span class="ow">and</span> <span class="n">reg</span><span class="o">.</span><span class="n">unique_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">keep_uids</span><span class="p">:</span>
+            <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Removing stale button entity </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">reg</span><span class="o">.</span><span class="n">entity_id</span><span class="p">)</span>
+            <span class="n">ent_reg</span><span class="o">.</span><span class="n">async_remove</span><span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">entity_id</span><span class="p">)</span>
+
     <span class="n">async_add_entities</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span></div>
 
 

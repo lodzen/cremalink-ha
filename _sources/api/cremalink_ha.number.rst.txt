@@ -1,0 +1,7 @@
+cremalink\_ha.number module
+===========================
+
+.. automodule:: cremalink_ha.number
+   :members:
+   :show-inheritance:
+   :undoc-members:

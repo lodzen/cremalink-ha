@@ -1,0 +1,288 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.number &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.number</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.number</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Number platform — per-recipe parameter sliders (spec FR-008..010).</span>
+
+<span class="sd">One entity per user-adjustable recipe parameter (``cremalink.ecam.params</span>
+<span class="sd">.PARAMS``). Bounds, labels, units, and steps come from the machine's</span>
+<span class="sd">``0xB0`` descriptor; the shown value is the pending override if set,</span>
+<span class="sd">else the loaded profile-stored value — machine defaults only when the</span>
+<span class="sd">read fell back (``values_source`` attribute).</span>
+
+<span class="sd">Setting a value only records a raw override in the recipe session —</span>
+<span class="sd">nothing is written to the machine until ``button.brew_recipe`` merges</span>
+<span class="sd">the overrides into one ``0x83`` brew frame (transient; spec Q2).</span>
+<span class="sd">"""</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.ecam.params</span><span class="w"> </span><span class="kn">import</span> <span class="n">PARAMS</span><span class="p">,</span> <span class="n">adjustable_params</span><span class="p">,</span> <span class="n">to_display</span><span class="p">,</span> <span class="n">to_raw</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.number</span><span class="w"> </span><span class="kn">import</span> <span class="n">NumberEntity</span><span class="p">,</span> <span class="n">NumberMode</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistantError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">entity_registry</span> <span class="k">as</span> <span class="n">er</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">BUTTON_UNAVAILABLE_STATUSES</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">NOT_BREWING_STATUSES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
+
+<span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="async_setup_entry">
+<a class="viewcode-back" href="../../api/cremalink_ha.number.html#cremalink_ha.number.async_setup_entry">[docs]</a>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_setup_entry</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">async_add_entities</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Set up the recipe-parameter number platform."""</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">hass</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">DOMAIN</span><span class="p">][</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">]</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"recipe_session"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="c1"># Sweep orphaned param registry entries: params dropped from PARAMS</span>
+    <span class="c1"># (blend/inversion/temp — never brew-sheet controls on the Soul,</span>
+    <span class="c1"># research.md R12) would otherwise linger as unavailable rows.</span>
+    <span class="n">ent_reg</span> <span class="o">=</span> <span class="n">er</span><span class="o">.</span><span class="n">async_get</span><span class="p">(</span><span class="n">hass</span><span class="p">)</span>
+    <span class="n">keep_uids</span> <span class="o">=</span> <span class="p">{</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_recipe_param_</span><span class="si">{</span><span class="n">pid</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">pid</span> <span class="ow">in</span> <span class="n">PARAMS</span><span class="p">}</span>
+    <span class="k">for</span> <span class="n">reg</span> <span class="ow">in</span> <span class="n">er</span><span class="o">.</span><span class="n">async_entries_for_config_entry</span><span class="p">(</span><span class="n">ent_reg</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">reg</span><span class="o">.</span><span class="n">domain</span> <span class="o">==</span> <span class="s2">"number"</span> <span class="ow">and</span> <span class="n">reg</span><span class="o">.</span><span class="n">unique_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">keep_uids</span><span class="p">:</span>
+            <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Removing stale recipe-param entity </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">reg</span><span class="o">.</span><span class="n">entity_id</span><span class="p">)</span>
+            <span class="n">ent_reg</span><span class="o">.</span><span class="n">async_remove</span><span class="p">(</span><span class="n">reg</span><span class="o">.</span><span class="n">entity_id</span><span class="p">)</span>
+
+    <span class="n">async_add_entities</span><span class="p">(</span>
+        <span class="n">CremalinkParamNumber</span><span class="p">(</span>
+            <span class="n">data</span><span class="p">[</span><span class="s2">"coordinator"</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="s2">"device"</span><span class="p">],</span> <span class="n">session</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">param_id</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">param_id</span> <span class="ow">in</span> <span class="n">PARAMS</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="CremalinkParamNumber">
+<a class="viewcode-back" href="../../api/cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkParamNumber</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">NumberEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""One adjustable parameter of the currently selected recipe."""</span>
+
+    <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">_attr_mode</span> <span class="o">=</span> <span class="n">NumberMode</span><span class="o">.</span><span class="n">SLIDER</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">param_id</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span> <span class="o">=</span> <span class="n">param_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_meta</span> <span class="o">=</span> <span class="n">PARAMS</span><span class="p">[</span><span class="n">param_id</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"param_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_meta</span><span class="o">.</span><span class="n">key</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_recipe_param_</span><span class="si">{</span><span class="n">param_id</span><span class="si">}</span><span class="s2">"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_info</span> <span class="o">=</span> <span class="n">DeviceInfo</span><span class="p">(</span>
+            <span class="n">identifiers</span><span class="o">=</span><span class="p">{(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)},</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+            <span class="n">manufacturer</span><span class="o">=</span><span class="s2">"cremalink"</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_params</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">params</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bound</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span>
+        <span class="k">if</span> <span class="n">params</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">params</span><span class="o">.</span><span class="n">bounds</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_raw_value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Pending override, else loaded stored/default value (raw units)."""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">overrides</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">overrides</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">]</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span>
+        <span class="k">if</span> <span class="n">params</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">params</span><span class="o">.</span><span class="n">values</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_min_value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">bound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bound</span>
+        <span class="k">return</span> <span class="n">to_display</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">,</span> <span class="n">bound</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">bound</span> <span class="k">else</span> <span class="mi">0</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_max_value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">bound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bound</span>
+        <span class="k">return</span> <span class="n">to_display</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">,</span> <span class="n">bound</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="k">if</span> <span class="n">bound</span> <span class="k">else</span> <span class="mi">0</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_step</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""One raw machine unit in display units (1 ml, 0.1 s, 1 step)."""</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_meta</span><span class="o">.</span><span class="n">to_display</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_unit_of_measurement</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_meta</span><span class="o">.</span><span class="n">unit</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">native_value</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_value</span>
+        <span class="k">return</span> <span class="n">to_display</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">,</span> <span class="n">raw</span><span class="p">)</span> <span class="k">if</span> <span class="n">raw</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_state_attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_raw_value</span>
+        <span class="k">if</span> <span class="n">params</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">{</span><span class="s2">"param_id"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">}</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">"param_id"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">,</span>
+            <span class="s2">"beverage_id"</span><span class="p">:</span> <span class="n">params</span><span class="o">.</span><span class="n">beverage_id</span><span class="p">,</span>
+            <span class="s2">"values_source"</span><span class="p">:</span> <span class="n">params</span><span class="o">.</span><span class="n">source</span><span class="p">,</span>
+            <span class="s2">"overridden"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">overrides</span><span class="p">,</span>
+            <span class="o">**</span><span class="p">({</span><span class="s2">"raw_value"</span><span class="p">:</span> <span class="n">raw</span><span class="p">}</span> <span class="k">if</span> <span class="n">raw</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{}),</span>
+        <span class="p">}</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Only while the recipe enables this parameter (app rules).</span>
+
+<span class="sd">        ``adjustable_params`` mirrors the app's brew-sheet builder</span>
+<span class="sd">        (``MainBeveragesFragment.E1`` — research.md R12): hidden while a</span>
+<span class="sd">        load is pending (spec Q3), while brewing, and in standby-like</span>
+<span class="sd">        states — same matrix as the drink buttons.</span>
+<span class="sd">        """</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">available</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">data</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="c1"># `ready` also covers the stale-data window between a recipe/</span>
+        <span class="c1"># profile change and the next ensure cycle (US5).</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">ready</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_params</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">adjustable_params</span><span class="p">(</span>
+            <span class="n">params</span><span class="o">.</span><span class="n">bounds</span><span class="p">,</span> <span class="n">params</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">params</span><span class="o">.</span><span class="n">beverage_id</span>
+        <span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">brewing</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">NOT_BREWING_STATUSES</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="n">data</span><span class="o">.</span><span class="n">is_busy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">BUTTON_UNAVAILABLE_STATUSES</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">brewing</span>
+
+<div class="viewcode-block" id="CremalinkParamNumber.async_set_native_value">
+<a class="viewcode-back" href="../../api/cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.async_set_native_value">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_set_native_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Record a raw override — no machine write until brew (spec Q2)."""</span>
+        <span class="c1"># `available` is UI-only — a service call could otherwise write</span>
+        <span class="c1"># an override onto params scoped to a stale recipe/profile.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">ready</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span>
+                <span class="s2">"Recipe parameters are not loaded yet for the selected "</span>
+                <span class="s2">"recipe/profile — wait for them to appear first."</span>
+            <span class="p">)</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="n">to_raw</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="n">bound</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bound</span>
+        <span class="k">if</span> <span class="n">bound</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">raw</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">bound</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">min</span><span class="p">(</span><span class="n">bound</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">raw</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">set_override</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_param_id</span><span class="p">,</span> <span class="n">raw</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">async_write_ha_state</span><span class="p">()</span></div>
+</div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

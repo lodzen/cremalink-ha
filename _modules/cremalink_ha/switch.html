@@ -85,18 +85,32 @@
 <span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.ecam.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">SETTING_BIT_MAPS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.switch</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwitchEntity</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">EntityCategory</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistantError</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.restore_state</span><span class="w"> </span><span class="kn">import</span> <span class="n">RestoreEntity</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BUTTON_UNAVAILABLE_STATUSES</span><span class="p">,</span>
+    <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span>
+    <span class="n">DOMAIN</span><span class="p">,</span>
+    <span class="n">NOT_BREWING_STATUSES</span><span class="p">,</span>
+    <span class="n">NOT_READY_STATUSES</span><span class="p">,</span>
+    <span class="n">STANDBY_STATUSES</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
 
 <span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+<span class="c1">#: How long a wakeup/standby intent is held before the monitor's report</span>
+<span class="c1">#: wins again — ECAM wake-up incl. rinse can take ~a minute.</span>
+<span class="n">_PENDING_SECONDS</span> <span class="o">=</span> <span class="mi">120</span>
 
 <span class="c1">#: Bit-setting switch definitions: (setting key, translation-key suffix,</span>
 <span class="c1">#: icon). The suffix doubles as the unique-id tail.</span>
@@ -120,6 +134,9 @@
     <span class="n">coordinator</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"coordinator"</span><span class="p">]</span>
     <span class="n">device</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s2">"device"</span><span class="p">]</span>
     <span class="n">entities</span> <span class="o">=</span> <span class="p">[</span><span class="n">CremalinkPowerSwitch</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">)]</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"recipe_session"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkBrewSwitch</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">entry</span><span class="p">))</span>
     <span class="n">capabilities</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"capabilities"</span><span class="p">,</span> <span class="p">{})</span> <span class="ow">or</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">icon</span> <span class="ow">in</span> <span class="n">SETTING_SWITCHES</span><span class="p">:</span>
         <span class="n">setting</span> <span class="o">=</span> <span class="n">SETTING_BIT_MAPS</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
@@ -165,17 +182,31 @@
             <span class="n">name</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
             <span class="n">manufacturer</span><span class="o">=</span><span class="s2">"cremalink"</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pending</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_on</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">"""Return true if the switch is on."""</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">status_name</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Return true if the switch is on.</span>
+
+<span class="sd">        A wakeup/standby transition takes a while on the machine (wake</span>
+<span class="sd">        incl. rinse can run ~a minute): the monitor still reports</span>
+<span class="sd">        ``in_standby`` right after the command lands, which flipped the</span>
+<span class="sd">        switch straight back. The intended state is held until the</span>
+<span class="sd">        monitor confirms it or the pending window expires.</span>
+<span class="sd">        """</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">""</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">target</span><span class="p">,</span> <span class="n">since</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pending</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">status</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">target</span>
+            <span class="n">awake</span> <span class="o">=</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"standby"</span><span class="p">,</span> <span class="s2">"in_standby"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">awake</span> <span class="o">==</span> <span class="n">target</span> <span class="ow">or</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">since</span> <span class="o">&gt;=</span> <span class="n">_PENDING_SECONDS</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_pending</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">target</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">status</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">None</span>
-        <span class="c1"># Check if the status indicates the device is not in standby</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">status_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span>
-            <span class="s2">"standby"</span><span class="p">,</span>
-            <span class="s2">"in_standby"</span><span class="p">,</span>
-        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"standby"</span><span class="p">,</span> <span class="s2">"in_standby"</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -189,6 +220,8 @@
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_turn_on</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Turn the switch on."""</span>
         <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">do</span><span class="p">,</span> <span class="s2">"wakeup"</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pending</span> <span class="o">=</span> <span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">async_write_ha_state</span><span class="p">()</span>
         <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">async_request_refresh</span><span class="p">()</span></div>
 
 
@@ -197,6 +230,8 @@
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_turn_off</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Turn the switch off."""</span>
         <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">do</span><span class="p">,</span> <span class="s2">"standby"</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pending</span> <span class="o">=</span> <span class="p">(</span><span class="kc">False</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">async_write_ha_state</span><span class="p">()</span>
         <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">async_request_refresh</span><span class="p">()</span></div>
 </div>
 
@@ -204,12 +239,16 @@
 
 <div class="viewcode-block" id="CremalinkSettingSwitch">
 <a class="viewcode-back" href="../../api/cremalink_ha.switch.html#cremalink_ha.switch.CremalinkSettingSwitch">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkSettingSwitch</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">SwitchEntity</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkSettingSwitch</span><span class="p">(</span>
+    <span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">SwitchEntity</span><span class="p">,</span> <span class="n">RestoreEntity</span>
+<span class="p">):</span>
 <span class="w">    </span><span class="sd">"""A boolean flag inside the shared param-63 user-config word.</span>
 
 <span class="sd">    Writes go through ``Device.set_setting_bit``: the current word is read</span>
 <span class="sd">    first and the flag merged in, so unrelated bits survive (protocol.md</span>
-<span class="sd">    §14.8). State only ever reflects machine-confirmed values.</span>
+<span class="sd">    §14.8). State only ever reflects machine-confirmed values —</span>
+<span class="sd">    ``RestoreEntity`` keeps the last confirmed state visible across a</span>
+<span class="sd">    restart when standby blocks the re-read; a successful fetch wins.</span>
 <span class="sd">    """</span>
 
     <span class="n">_attr_entity_category</span> <span class="o">=</span> <span class="n">EntityCategory</span><span class="o">.</span><span class="n">CONFIG</span>
@@ -241,6 +280,15 @@
             <span class="n">name</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
             <span class="n">manufacturer</span><span class="o">=</span><span class="s2">"cremalink"</span><span class="p">,</span>
         <span class="p">)</span>
+
+<div class="viewcode-block" id="CremalinkSettingSwitch.async_added_to_hass">
+<a class="viewcode-back" href="../../api/cremalink_ha.switch.html#cremalink_ha.switch.CremalinkSettingSwitch.async_added_to_hass">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_added_to_hass</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">async_added_to_hass</span><span class="p">()</span>
+        <span class="n">last</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_state</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">last</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">last</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"on"</span><span class="p">,</span> <span class="s2">"off"</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_is_on</span> <span class="o">=</span> <span class="n">last</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">"on"</span></div>
+
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_on</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -330,6 +378,106 @@
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_turn_off</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Turn the setting off."""</span>
         <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_async_set</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CremalinkBrewSwitch">
+<a class="viewcode-back" href="../../api/cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkBrewSwitch</span><span class="p">(</span><span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">SwitchEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""One entity for brew + stop — the recipe stays in ``select.recipe``.</span>
+
+<span class="sd">    ON while the monitor reports a brewing action — also when the brew</span>
+<span class="sd">    was started at the machine's own panel. ``turn_on`` sends the</span>
+<span class="sd">    session's effective values (stored + pending overrides) in one</span>
+<span class="sd">    ``0x83`` frame via ``device.brew`` — transient, never persisted;</span>
+<span class="sd">    ``turn_off`` sends ``stop`` (a ``beverage_id`` command,</span>
+<span class="sd">    action=STOPV2), harmless when idle. Replaces the former</span>
+<span class="sd">    ``button.brew_recipe`` + ``button.cmd_stop`` pair.</span>
+<span class="sd">    """</span>
+
+    <span class="n">_attr_has_entity_name</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">session</span><span class="p">,</span> <span class="n">entry</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="s2">"brew_recipe"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_brew_recipe"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:coffee"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_info</span> <span class="o">=</span> <span class="n">DeviceInfo</span><span class="p">(</span>
+            <span class="n">identifiers</span><span class="o">=</span><span class="p">{(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)},</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+            <span class="n">manufacturer</span><span class="o">=</span><span class="s2">"cremalink"</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_brewing</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Monitor says a brewing action is running (same rule the drink</span>
+<span class="sd">        buttons used): non-standby status + the busy/action byte set."""</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span>
+            <span class="n">data</span>
+            <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+            <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">NOT_BREWING_STATUSES</span>
+            <span class="ow">and</span> <span class="n">data</span><span class="o">.</span><span class="n">is_busy</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_on</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_brewing</span><span class="p">()</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Stoppable while brewing; brewable when the machine is ready</span>
+<span class="sd">        and the session holds a loaded recipe (spec clarification Q3)."""</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">available</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">data</span> <span class="ow">or</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_brewing</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">in</span> <span class="n">BUTTON_UNAVAILABLE_STATUSES</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">ready</span>
+
+<div class="viewcode-block" id="CremalinkBrewSwitch.async_turn_on">
+<a class="viewcode-back" href="../../api/cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch.async_turn_on">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_turn_on</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="k">if</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">status_name</span> <span class="ow">in</span> <span class="n">NOT_READY_STATUSES</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span><span class="s2">"The machine is not ready; turn it on first."</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">is_busy</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span><span class="s2">"The machine is busy; wait until it is ready."</span><span class="p">)</span>
+        <span class="n">beverage_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">selected_beverage</span>
+        <span class="k">if</span> <span class="n">beverage_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span><span class="s2">"Select a recipe first."</span><span class="p">)</span>
+        <span class="c1"># `available` is UI-only — a service call must not brew with</span>
+        <span class="c1"># params that are missing, loading, or scoped to a stale</span>
+        <span class="c1"># recipe/profile (US5).</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">ready</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span>
+                <span class="s2">"Recipe parameters are not loaded yet for the selected "</span>
+                <span class="s2">"recipe/profile — wait for them to appear, then brew."</span>
+            <span class="p">)</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+            <span class="n">partial</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">brew</span><span class="p">,</span>
+                <span class="n">beverage_id</span><span class="p">,</span>
+                <span class="n">overrides</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">overrides</span><span class="p">),</span>
+                <span class="n">params</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">params</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">async_request_refresh</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="CremalinkBrewSwitch.async_turn_off">
+<a class="viewcode-back" href="../../api/cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch.async_turn_off">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_turn_off</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">do</span><span class="p">,</span> <span class="s2">"stop"</span><span class="p">)</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">async_request_refresh</span><span class="p">()</span></div>
 </div>
 
 </pre></div>

@@ -18,6 +18,8 @@ Submodules
    cremalink_ha.const
    cremalink_ha.coordinator
    cremalink_ha.diagnostics
+   cremalink_ha.number
+   cremalink_ha.recipe_session
    cremalink_ha.select
    cremalink_ha.sensor
    cremalink_ha.switch

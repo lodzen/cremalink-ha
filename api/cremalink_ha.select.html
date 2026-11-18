@@ -20,7 +20,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="cremalink_ha.sensor module" href="cremalink_ha.sensor.html" />
-    <link rel="prev" title="cremalink_ha.diagnostics module" href="cremalink_ha.diagnostics.html" /> 
+    <link rel="prev" title="cremalink_ha.recipe_session module" href="cremalink_ha.recipe_session.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -61,8 +61,12 @@
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.const.html">cremalink_ha.const module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.coordinator.html">cremalink_ha.coordinator module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html">cremalink_ha.number module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html">cremalink_ha.recipe_session module</a></li>
 <li class="toctree-l3 current"><a class="current reference internal" href="#">cremalink_ha.select module</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.CremalinkBeanSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.CremalinkProfileSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.CremalinkRecipeSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.CremalinkSettingSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSelect</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.SETTING_SELECTS"><code class="docutils literal notranslate"><span class="pre">SETTING_SELECTS</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.select.async_setup_entry"><code class="docutils literal notranslate"><span class="pre">async_setup_entry()</span></code></a></li>
@@ -113,6 +117,71 @@
 read-back; state is always a machine-confirmed option.</p></li>
 </ul>
 <dl class="py class">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">CremalinkBeanSelect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkBeanSelect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_BaseSelect</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">RestoreEntity</span></code></p>
+<p>BeanAdapt bean-system picker — options carry the user-assigned
+bean names from the <code class="docutils literal notranslate"><span class="pre">d25X</span></code> blobs (<code class="docutils literal notranslate"><span class="pre">Device.bean_systems</span></code>).</p>
+<p>Selecting sends the real selection frame <code class="docutils literal notranslate"><span class="pre">0xB9</span></code>
+(<code class="docutils literal notranslate"><span class="pre">device.select_bean_system</span></code>) — a session-gated write on §13’s
+untested list, so the entity is gated on readiness like the profile
+select. <code class="docutils literal notranslate"><span class="pre">current_option</span></code> always reflects the machine’s flagged
+bean, never a locally remembered choice. The options+selection are
+persisted: standby blocks <code class="docutils literal notranslate"><span class="pre">d25X</span></code> re-reads, so a restart would
+otherwise leave the select empty until wake (FR-035 pattern).</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.async_added_to_hass">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_added_to_hass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkBeanSelect.async_added_to_hass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.async_added_to_hass" title="Link to this definition"></a></dt>
+<dd><p>When entity is added to hass.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.async_refresh_state">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_refresh_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkBeanSelect.async_refresh_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.async_refresh_state" title="Link to this definition"></a></dt>
+<dd><p>Refresh the option state; implemented by each concrete select.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.async_select_option">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_select_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">option</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkBeanSelect.async_select_option"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.async_select_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.available">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">available</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.available" title="Link to this definition"></a></dt>
+<dd><p>Unavailable while the machine is not ready — a <code class="docutils literal notranslate"><span class="pre">0xB9</span></code>
+selection is a write, gated like the profile select.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.current_option">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">current_option</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.current_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.extra_restore_state_data">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_restore_state_data</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.extra_restore_state_data" title="Link to this definition"></a></dt>
+<dd><p>Persist options+selection for the standby case — without
+this HA stores <code class="docutils literal notranslate"><span class="pre">extra_data:</span> <span class="pre">null</span></code> and <code class="docutils literal notranslate"><span class="pre">d25X</span></code> blobs cannot
+be re-read while the machine sleeps.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.extra_state_attributes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_state_attributes</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.extra_state_attributes" title="Link to this definition"></a></dt>
+<dd><p>Return entity specific state attributes.</p>
+<p>Implemented by platform classes. Convention for attribute names
+is lowercase snake_case.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkBeanSelect.options">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">options</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkBeanSelect.options" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
 <dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">CremalinkProfileSelect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkProfileSelect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect" title="Link to this definition"></a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_BaseSelect</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">RestoreEntity</span></code></p>
@@ -153,6 +222,14 @@ profile selection is the one setting that is unavailable in standby.</p>
 <dd></dd></dl>
 
 <dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.extra_restore_state_data">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_restore_state_data</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.extra_restore_state_data" title="Link to this definition"></a></dt>
+<dd><p>Persist slot names + remembered index — the standby case
+cannot re-read <code class="docutils literal notranslate"><span class="pre">get_profiles</span></code>, and the plain-state path loses
+everything once an <code class="docutils literal notranslate"><span class="pre">unknown</span></code> state is saved.</p>
+</dd></dl>
+
+<dl class="py property">
 <dt class="sig sig-object py" id="cremalink_ha.select.CremalinkProfileSelect.extra_state_attributes">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_state_attributes</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkProfileSelect.extra_state_attributes" title="Link to this definition"></a></dt>
 <dd><p>The remembered profile, kept independent of the readable slots.</p>
@@ -166,10 +243,91 @@ profile selection is the one setting that is unavailable in standby.</p>
 </dd></dl>
 
 <dl class="py class">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">CremalinkRecipeSelect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkRecipeSelect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_BaseSelect</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">RestoreEntity</span></code></p>
+<p>Brewable-recipe picker — the single brew surface (spec FR-001..003).</p>
+<p>Options are the machine-catalogued beverages (<code class="docutils literal notranslate"><span class="pre">beverage_catalog</span></code> —
+no duplicates, no one-shots). Selecting a recipe is local-only: it
+clears the recipe session’s overrides and re-arms the param load; no
+machine write happens here. The load itself runs in the background
+on coordinator updates via <code class="docutils literal notranslate"><span class="pre">session.async_ensure_params</span></code>. The
+entity is still gated on readiness like the profile select —
+changing the selection while the machine sleeps would discard the
+loaded overrides for a brew it cannot confirm anyway.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.async_added_to_hass">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_added_to_hass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkRecipeSelect.async_added_to_hass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.async_added_to_hass" title="Link to this definition"></a></dt>
+<dd><p>Re-order the options once the cloud catalogue snapshot lands.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.async_refresh_state">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_refresh_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkRecipeSelect.async_refresh_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.async_refresh_state" title="Link to this definition"></a></dt>
+<dd><p>Populate options (executor).</p>
+<p>The recipe list itself is static (model table + command map —
+zero machine requests), so options exist immediately, even in
+standby or before the first monitor lands. Only the drink-menu
+order needs the machine (one GET per profile, cached) and is
+therefore fetched only while the machine is known to be awake
+(protocol.md §13/§14.12, research.md R11).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.async_select_option">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_select_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">option</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/builtins/stdtypes.html#str" title="(in Python v3.15)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkRecipeSelect.async_select_option"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.async_select_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.available">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">available</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.available" title="Link to this definition"></a></dt>
+<dd><p>Unavailable while the machine is not ready — same gate as the
+profile select (<code class="docutils literal notranslate"><span class="pre">NOT_READY_STATUSES</span></code>).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.current_option">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">current_option</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.current_option" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.extra_restore_state_data">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_restore_state_data</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.extra_restore_state_data" title="Link to this definition"></a></dt>
+<dd><p>Persist the selected beverage id — without this HA stores
+<code class="docutils literal notranslate"><span class="pre">extra_data:</span> <span class="pre">null</span></code> and the restore read always comes back
+<code class="docutils literal notranslate"><span class="pre">None</span></code> (live-observed: recipe select showed <code class="docutils literal notranslate"><span class="pre">unknown</span></code> after
+a restart despite a prior selection).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.extra_state_attributes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_state_attributes</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.extra_state_attributes" title="Link to this definition"></a></dt>
+<dd><p>Return entity specific state attributes.</p>
+<p>Implemented by platform classes. Convention for attribute names
+is lowercase snake_case.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkRecipeSelect.options">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">options</span></span><a class="headerlink" href="#cremalink_ha.select.CremalinkRecipeSelect.options" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
 <dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.select.</span></span><span class="sig-name descname"><span class="pre">CremalinkSettingSelect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkSettingSelect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect" title="Link to this definition"></a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_BaseSelect</span></code></p>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_BaseSelect</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">RestoreEntity</span></code></p>
 <p>Writable machine setting backed by a session-gated 0x90 write.</p>
+<p><code class="docutils literal notranslate"><span class="pre">RestoreEntity</span></code>: standby blocks the settings re-read, so the last
+machine-confirmed option survives a restart; the next successful
+<code class="docutils literal notranslate"><span class="pre">0x95</span></code> read still wins.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect.async_added_to_hass">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_added_to_hass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkSettingSelect.async_added_to_hass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect.async_added_to_hass" title="Link to this definition"></a></dt>
+<dd><p>When entity is added to hass.</p>
+</dd></dl>
+
 <dl class="py method">
 <dt class="sig sig-object py" id="cremalink_ha.select.CremalinkSettingSelect.async_refresh_state">
 <span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_refresh_state</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/select.html#CremalinkSettingSelect.async_refresh_state"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.select.CremalinkSettingSelect.async_refresh_state" title="Link to this definition"></a></dt>
@@ -217,7 +375,7 @@ entity translation key (name and option labels).</p>
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="cremalink_ha.diagnostics.html" class="btn btn-neutral float-left" title="cremalink_ha.diagnostics module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="cremalink_ha.recipe_session.html" class="btn btn-neutral float-left" title="cremalink_ha.recipe_session module" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="cremalink_ha.sensor.html" class="btn btn-neutral float-right" title="cremalink_ha.sensor module" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

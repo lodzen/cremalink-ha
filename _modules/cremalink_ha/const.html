@@ -1,0 +1,201 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>cremalink_ha.const &mdash; cremalink-ha v0.3.0b1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=e7ddd389"></script>
+      <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html">
+            
+              <img src="../../_static/icon.png" class="logo" alt="Logo"/>
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">Home</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api/modules.html">cremalink_ha</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api/cremalink_ha.html">cremalink_ha package</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">cremalink-ha</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+          <li class="breadcrumb-item"><a href="../cremalink_ha.html">cremalink_ha</a></li>
+      <li class="breadcrumb-item active">cremalink_ha.const</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for cremalink_ha.const</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Constants for the Cremalink Home Assistant integration."""</span>
+
+<span class="n">DEVICE_NAME</span> <span class="o">=</span> <span class="s2">"device_name"</span>
+
+<span class="n">DOMAIN</span> <span class="o">=</span> <span class="s2">"cremalink_ha"</span>
+<span class="n">CONF_ADDON_URL</span> <span class="o">=</span> <span class="s2">"addon_url"</span>
+<span class="n">CONF_DSN</span> <span class="o">=</span> <span class="s2">"dsn"</span>
+<span class="n">CONF_LAN_KEY</span> <span class="o">=</span> <span class="s2">"lan_key"</span>
+<span class="n">CONF_DEVICE_IP</span> <span class="o">=</span> <span class="s2">"device_ip"</span>
+<span class="n">CONF_DEVICE_MAP</span> <span class="o">=</span> <span class="s2">"device_map"</span>
+
+<span class="n">CONF_CONNECTION_TYPE</span> <span class="o">=</span> <span class="s2">"connection_type"</span>
+<span class="n">CONF_REFRESH_TOKEN</span> <span class="o">=</span> <span class="s2">"refresh_token"</span>
+<span class="n">CONF_TOKEN_FILE</span> <span class="o">=</span> <span class="s2">"token_file"</span>
+
+<span class="c1"># Cloud-assisted onboarding (cloud login replaces manual device-map/DSN entry)</span>
+<span class="n">CONF_EMAIL</span> <span class="o">=</span> <span class="s2">"email"</span>
+<span class="n">CONF_PASSWORD</span> <span class="o">=</span> <span class="s2">"password"</span>
+<span class="n">CONF_REGION</span> <span class="o">=</span> <span class="s2">"region"</span>
+<span class="n">CONF_MANUAL_SETUP</span> <span class="o">=</span> <span class="s2">"manual_setup"</span>
+<span class="n">DEFAULT_REGION</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="s2">"EU"</span>  <span class="c1"># only region with valid app credentials for v1 — see research.md #1</span>
+<span class="p">)</span>
+
+<span class="n">CONNECTION_LOCAL</span> <span class="o">=</span> <span class="s2">"local"</span>
+<span class="n">CONNECTION_CLOUD</span> <span class="o">=</span> <span class="s2">"cloud"</span>
+
+<span class="n">DEFAULT_ADDON_URL</span> <span class="o">=</span> <span class="s2">"http://localhost:10280"</span>
+<span class="n">CUSTOM_MAP_DIR</span> <span class="o">=</span> <span class="s2">"cremalink_custom_maps"</span>
+<span class="n">TOKEN_DIR</span> <span class="o">=</span> <span class="s2">"cremalink_tokens"</span>
+<span class="n">DEFAULT_MONITOR_POLL_INTERVAL</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">DEFAULT_NUDGER_POLL_INTERVAL</span> <span class="o">=</span> <span class="mi">1</span>
+
+<span class="c1"># Embedded local server (spec: 002-embedded-local-server) — replaces the</span>
+<span class="c1"># Supervisor add-on as the local connection mechanism.</span>
+<span class="n">CONF_CONNECTION_MODE</span> <span class="o">=</span> <span class="s2">"connection_mode"</span>
+<span class="n">CONNECTION_MODE_EMBEDDED</span> <span class="o">=</span> <span class="s2">"embedded"</span>
+<span class="n">CONF_ADVERTISED_IP</span> <span class="o">=</span> <span class="s2">"advertised_ip"</span>
+
+
+<div class="viewcode-block" id="catalog_ready_signal">
+<a class="viewcode-back" href="../../api/cremalink_ha.const.html#cremalink_ha.const.catalog_ready_signal">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">catalog_ready_signal</span><span class="p">(</span><span class="n">entry_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Dispatcher signal: the cloud catalogue snapshot was seeded."""</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">DOMAIN</span><span class="si">}</span><span class="s2">_catalog_ready_</span><span class="si">{</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">"</span></div>
+
+
+
+<span class="n">DEFAULT_LOCAL_SERVER_PORT</span> <span class="o">=</span> <span class="mi">10280</span>
+<span class="n">LOCAL_SERVER_PORT_FALLBACK_RANGE</span> <span class="o">=</span> <span class="mi">50</span>
+<span class="n">REPAIR_RECONFIGURE_REQUIRED</span> <span class="o">=</span> <span class="s2">"reconfigure_required"</span>
+
+<span class="c1">#: Statuses during which the machine stops evaluating alarm/switch/accessory</span>
+<span class="c1">#: bytes — latched values must not surface as live readings (T044/FR-034).</span>
+<span class="n">STANDBY_STATUSES</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"in_standby"</span><span class="p">,</span> <span class="s2">"going_to_sleep"</span><span class="p">,</span> <span class="s2">"sleeping"</span><span class="p">,</span> <span class="s2">"deep_sleep"</span><span class="p">}</span>
+
+<span class="c1">#: Statuses in which the machine cannot start a drink (asleep or still waking).</span>
+<span class="n">NOT_READY_STATUSES</span> <span class="o">=</span> <span class="n">STANDBY_STATUSES</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"waking_up"</span><span class="p">}</span>
+
+<span class="c1">#: Statuses in which the monitor's action byte does not mean "a drink is</span>
+<span class="c1">#: being brewed": the standby family (the byte stays latched), waking up, and</span>
+<span class="c1">#: the power-on/off rinse. Button availability must not follow it there.</span>
+<span class="n">NOT_BREWING_STATUSES</span> <span class="o">=</span> <span class="n">NOT_READY_STATUSES</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"rinsing"</span><span class="p">}</span>
+
+<span class="c1">#: Device-map commands that have an entity translation (``cmd_&lt;command&gt;``).</span>
+<span class="c1">#: Commands of custom maps fall back to a generated English name.</span>
+<span class="n">TRANSLATED_COMMANDS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">"americano"</span><span class="p">,</span>
+        <span class="s2">"caffe_latte"</span><span class="p">,</span>
+        <span class="s2">"cappuccino"</span><span class="p">,</span>
+        <span class="s2">"cappuccino_mix"</span><span class="p">,</span>
+        <span class="s2">"cappuccino_plus"</span><span class="p">,</span>
+        <span class="s2">"coffee"</span><span class="p">,</span>
+        <span class="s2">"cortado"</span><span class="p">,</span>
+        <span class="s2">"doppio_plus"</span><span class="p">,</span>
+        <span class="s2">"double_espresso"</span><span class="p">,</span>
+        <span class="s2">"espresso"</span><span class="p">,</span>
+        <span class="s2">"espresso_macchiato"</span><span class="p">,</span>
+        <span class="s2">"espresso_soul"</span><span class="p">,</span>
+        <span class="s2">"flat_white"</span><span class="p">,</span>
+        <span class="s2">"hot_milk"</span><span class="p">,</span>
+        <span class="s2">"hot_water"</span><span class="p">,</span>
+        <span class="s2">"latte_macchiato"</span><span class="p">,</span>
+        <span class="s2">"long_coffee"</span><span class="p">,</span>
+        <span class="s2">"stop"</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+
+<span class="c1">#: Statuses in which the drink buttons are unavailable: asleep or waking up.</span>
+<span class="c1">#: ``going_to_sleep`` is deliberately absent — the transition into standby</span>
+<span class="c1">#: must not grey the buttons out, only reaching standby does.</span>
+<span class="n">BUTTON_UNAVAILABLE_STATUSES</span> <span class="o">=</span> <span class="p">(</span><span class="n">STANDBY_STATUSES</span> <span class="o">-</span> <span class="p">{</span><span class="s2">"going_to_sleep"</span><span class="p">})</span> <span class="o">|</span> <span class="p">{</span><span class="s2">"waking_up"</span><span class="p">}</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Lodzen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

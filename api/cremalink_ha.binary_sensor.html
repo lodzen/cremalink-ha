@@ -67,6 +67,8 @@
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.const.html">cremalink_ha.const module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.coordinator.html">cremalink_ha.coordinator module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html">cremalink_ha.number module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html">cremalink_ha.recipe_session module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html">cremalink_ha.select module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html">cremalink_ha.sensor module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html">cremalink_ha.switch module</a></li>
@@ -120,12 +122,27 @@ translations, keyed by <code class="docutils literal notranslate"><span class="p
 <dl class="py class">
 <dt class="sig sig-object py" id="cremalink_ha.binary_sensor.CremalinkBinarySensor">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.binary_sensor.</span></span><span class="sig-name descname"><span class="pre">CremalinkBinarySensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/binary_sensor.html#CremalinkBinarySensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.binary_sensor.CremalinkBinarySensor" title="Link to this definition"></a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">CoordinatorEntity</span></code>[<a class="reference internal" href="cremalink_ha.coordinator.html#cremalink_ha.coordinator.CremalinkCoordinator" title="cremalink_ha.coordinator.CremalinkCoordinator"><code class="xref py py-class docutils literal notranslate"><span class="pre">CremalinkCoordinator</span></code></a>], <code class="xref py py-class docutils literal notranslate"><span class="pre">BinarySensorEntity</span></code></p>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">CoordinatorEntity</span></code>[<a class="reference internal" href="cremalink_ha.coordinator.html#cremalink_ha.coordinator.CremalinkCoordinator" title="cremalink_ha.coordinator.CremalinkCoordinator"><code class="xref py py-class docutils literal notranslate"><span class="pre">CremalinkCoordinator</span></code></a>], <code class="xref py py-class docutils literal notranslate"><span class="pre">BinarySensorEntity</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">RestoreEntity</span></code></p>
 <p>Representation of a Cremalink binary sensor.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.binary_sensor.CremalinkBinarySensor.async_added_to_hass">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_added_to_hass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/binary_sensor.html#CremalinkBinarySensor.async_added_to_hass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.binary_sensor.CremalinkBinarySensor.async_added_to_hass" title="Link to this definition"></a></dt>
+<dd><p>When entity is added to hass.</p>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="cremalink_ha.binary_sensor.CremalinkBinarySensor.available">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">available</span></span><a class="headerlink" href="#cremalink_ha.binary_sensor.CremalinkBinarySensor.available" title="Link to this definition"></a></dt>
 <dd><p>Unavailable only after the consecutive-failure threshold (T045).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.binary_sensor.CremalinkBinarySensor.extra_state_attributes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_state_attributes</span></span><a class="headerlink" href="#cremalink_ha.binary_sensor.CremalinkBinarySensor.extra_state_attributes" title="Link to this definition"></a></dt>
+<dd><p>Persist the last live reading — it survives “unknown” states.</p>
+<p><code class="docutils literal notranslate"><span class="pre">_standby_cache</span></code> is updated on every successful read, so this
+attribute always carries the newest confirmed bit even when the
+visible state is unknown (standby frames without bits).</p>
 </dd></dl>
 
 <dl class="py property">

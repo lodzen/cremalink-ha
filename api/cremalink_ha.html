@@ -61,6 +61,8 @@
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.const.html">cremalink_ha.const module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.coordinator.html">cremalink_ha.coordinator module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html">cremalink_ha.number module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html">cremalink_ha.recipe_session module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html">cremalink_ha.select module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html">cremalink_ha.sensor module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html">cremalink_ha.switch module</a></li>
@@ -147,7 +149,9 @@ a stuck teardown must never block a reload/unload/removal indefinitely
 <li class="toctree-l1"><a class="reference internal" href="cremalink_ha.binary_sensor.html">cremalink_ha.binary_sensor module</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.BINARY_SENSORS"><code class="docutils literal notranslate"><span class="pre">BINARY_SENSORS</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor"><code class="docutils literal notranslate"><span class="pre">CremalinkBinarySensor</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor.async_added_to_hass"><code class="docutils literal notranslate"><span class="pre">CremalinkBinarySensor.async_added_to_hass()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor.available"><code class="docutils literal notranslate"><span class="pre">CremalinkBinarySensor.available</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor.extra_state_attributes"><code class="docutils literal notranslate"><span class="pre">CremalinkBinarySensor.extra_state_attributes</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor.is_on"><code class="docutils literal notranslate"><span class="pre">CremalinkBinarySensor.is_on</span></code></a></li>
 </ul>
 </li>
@@ -193,6 +197,7 @@ a stuck teardown must never block a reload/unload/removal indefinitely
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.const.html#cremalink_ha.const.NOT_READY_STATUSES"><code class="docutils literal notranslate"><span class="pre">NOT_READY_STATUSES</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.const.html#cremalink_ha.const.STANDBY_STATUSES"><code class="docutils literal notranslate"><span class="pre">STANDBY_STATUSES</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.const.html#cremalink_ha.const.TRANSLATED_COMMANDS"><code class="docutils literal notranslate"><span class="pre">TRANSLATED_COMMANDS</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.const.html#cremalink_ha.const.catalog_ready_signal"><code class="docutils literal notranslate"><span class="pre">catalog_ready_signal()</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="cremalink_ha.coordinator.html">cremalink_ha.coordinator module</a><ul>
@@ -205,6 +210,7 @@ a stuck teardown must never block a reload/unload/removal indefinitely
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.coordinator.html#cremalink_ha.coordinator.DEFAULT_FAILURE_THRESHOLD"><code class="docutils literal notranslate"><span class="pre">DEFAULT_FAILURE_THRESHOLD</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.coordinator.html#cremalink_ha.coordinator.MONITOR_ATTEMPTS"><code class="docutils literal notranslate"><span class="pre">MONITOR_ATTEMPTS</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.coordinator.html#cremalink_ha.coordinator.SETTINGS_INTERVAL"><code class="docutils literal notranslate"><span class="pre">SETTINGS_INTERVAL</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.coordinator.html#cremalink_ha.coordinator.STATISTICS_BREW_SETTLE_SECONDS"><code class="docutils literal notranslate"><span class="pre">STATISTICS_BREW_SETTLE_SECONDS</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.coordinator.html#cremalink_ha.coordinator.STATISTICS_INTERVAL"><code class="docutils literal notranslate"><span class="pre">STATISTICS_INTERVAL</span></code></a></li>
 </ul>
 </li>
@@ -213,18 +219,74 @@ a stuck teardown must never block a reload/unload/removal indefinitely
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.diagnostics.html#cremalink_ha.diagnostics.async_get_config_entry_diagnostics"><code class="docutils literal notranslate"><span class="pre">async_get_config_entry_diagnostics()</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="cremalink_ha.number.html">cremalink_ha.number module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.async_set_native_value"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.async_set_native_value()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.available"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.available</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.extra_state_attributes"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.extra_state_attributes</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.native_max_value"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.native_max_value</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.native_min_value"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.native_min_value</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.native_step"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.native_step</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.native_unit_of_measurement"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.native_unit_of_measurement</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.CremalinkParamNumber.native_value"><code class="docutils literal notranslate"><span class="pre">CremalinkParamNumber.native_value</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.number.html#cremalink_ha.number.async_setup_entry"><code class="docutils literal notranslate"><span class="pre">async_setup_entry()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="cremalink_ha.recipe_session.html">cremalink_ha.recipe_session module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.LOAD_RETRY_INTERVAL"><code class="docutils literal notranslate"><span class="pre">LOAD_RETRY_INTERVAL</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession"><code class="docutils literal notranslate"><span class="pre">RecipeSession</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.async_ensure_params"><code class="docutils literal notranslate"><span class="pre">RecipeSession.async_ensure_params()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.clear"><code class="docutils literal notranslate"><span class="pre">RecipeSession.clear()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.device"><code class="docutils literal notranslate"><span class="pre">RecipeSession.device</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.loading"><code class="docutils literal notranslate"><span class="pre">RecipeSession.loading</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.overrides"><code class="docutils literal notranslate"><span class="pre">RecipeSession.overrides</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.params"><code class="docutils literal notranslate"><span class="pre">RecipeSession.params</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.ready"><code class="docutils literal notranslate"><span class="pre">RecipeSession.ready</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.select"><code class="docutils literal notranslate"><span class="pre">RecipeSession.select()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.selected_beverage"><code class="docutils literal notranslate"><span class="pre">RecipeSession.selected_beverage</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html#cremalink_ha.recipe_session.RecipeSession.set_override"><code class="docutils literal notranslate"><span class="pre">RecipeSession.set_override()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="cremalink_ha.select.html">cremalink_ha.select module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.async_added_to_hass"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.async_added_to_hass()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.async_refresh_state"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.async_refresh_state()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.async_select_option"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.async_select_option()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.available"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.available</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.current_option"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.current_option</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.extra_restore_state_data"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.extra_restore_state_data</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.extra_state_attributes"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.extra_state_attributes</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.options"><code class="docutils literal notranslate"><span class="pre">CremalinkBeanSelect.options</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.async_added_to_hass"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.async_added_to_hass()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.async_refresh_state"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.async_refresh_state()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.async_select_option"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.async_select_option()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.available"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.available</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.current_option"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.current_option</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.extra_restore_state_data"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.extra_restore_state_data</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.extra_state_attributes"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.extra_state_attributes</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.options"><code class="docutils literal notranslate"><span class="pre">CremalinkProfileSelect.options</span></code></a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.async_added_to_hass"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.async_added_to_hass()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.async_refresh_state"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.async_refresh_state()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.async_select_option"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.async_select_option()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.available"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.available</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.current_option"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.current_option</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.extra_restore_state_data"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.extra_restore_state_data</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.extra_state_attributes"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.extra_state_attributes</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.options"><code class="docutils literal notranslate"><span class="pre">CremalinkRecipeSelect.options</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkSettingSelect"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSelect</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkSettingSelect.async_added_to_hass"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSelect.async_added_to_hass()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkSettingSelect.async_refresh_state"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSelect.async_refresh_state()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkSettingSelect.async_select_option"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSelect.async_select_option()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html#cremalink_ha.select.CremalinkSettingSelect.current_option"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSelect.current_option</span></code></a></li>
@@ -242,6 +304,8 @@ a stuck teardown must never block a reload/unload/removal indefinitely
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkSensor"><code class="docutils literal notranslate"><span class="pre">CremalinkSensor</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkSensor.async_added_to_hass"><code class="docutils literal notranslate"><span class="pre">CremalinkSensor.async_added_to_hass()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkSensor.extra_state_attributes"><code class="docutils literal notranslate"><span class="pre">CremalinkSensor.extra_state_attributes</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html#cremalink_ha.sensor.CremalinkSensor.native_value"><code class="docutils literal notranslate"><span class="pre">CremalinkSensor.native_value</span></code></a></li>
 </ul>
 </li>
@@ -254,6 +318,13 @@ a stuck teardown must never block a reload/unload/removal indefinitely
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="cremalink_ha.switch.html">cremalink_ha.switch module</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch"><code class="docutils literal notranslate"><span class="pre">CremalinkBrewSwitch</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch.async_turn_off"><code class="docutils literal notranslate"><span class="pre">CremalinkBrewSwitch.async_turn_off()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch.async_turn_on"><code class="docutils literal notranslate"><span class="pre">CremalinkBrewSwitch.async_turn_on()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch.available"><code class="docutils literal notranslate"><span class="pre">CremalinkBrewSwitch.available</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkBrewSwitch.is_on"><code class="docutils literal notranslate"><span class="pre">CremalinkBrewSwitch.is_on</span></code></a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkPowerSwitch"><code class="docutils literal notranslate"><span class="pre">CremalinkPowerSwitch</span></code></a><ul>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkPowerSwitch.async_turn_off"><code class="docutils literal notranslate"><span class="pre">CremalinkPowerSwitch.async_turn_off()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkPowerSwitch.async_turn_on"><code class="docutils literal notranslate"><span class="pre">CremalinkPowerSwitch.async_turn_on()</span></code></a></li>
@@ -262,6 +333,7 @@ a stuck teardown must never block a reload/unload/removal indefinitely
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkSettingSwitch"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSwitch</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkSettingSwitch.async_added_to_hass"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSwitch.async_added_to_hass()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkSettingSwitch.async_refresh_state"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSwitch.async_refresh_state()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkSettingSwitch.async_turn_off"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSwitch.async_turn_off()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html#cremalink_ha.switch.CremalinkSettingSwitch.async_turn_on"><code class="docutils literal notranslate"><span class="pre">CremalinkSettingSwitch.async_turn_on()</span></code></a></li>

@@ -87,17 +87,32 @@
 <span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 
+<span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.domain.device</span><span class="w"> </span><span class="kn">import</span> <span class="n">BeanSystem</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">cremalink.ecam.settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">SETTING_OPTION_MAPS</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.components.select</span><span class="w"> </span><span class="kn">import</span> <span class="n">SelectEntity</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">EntityCategory</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">callback</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">HomeAssistantError</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.dispatcher</span><span class="w"> </span><span class="kn">import</span> <span class="n">async_dispatcher_connect</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.restore_state</span><span class="w"> </span><span class="kn">import</span> <span class="n">RestoreEntity</span><span class="p">,</span> <span class="n">RestoreStateData</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.restore_state</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">RestoredExtraData</span><span class="p">,</span>
+    <span class="n">RestoreEntity</span><span class="p">,</span>
+    <span class="n">RestoreStateData</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">NOT_READY_STATUSES</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span>
+    <span class="n">DOMAIN</span><span class="p">,</span>
+    <span class="n">NOT_READY_STATUSES</span><span class="p">,</span>
+    <span class="n">STANDBY_STATUSES</span><span class="p">,</span>
+    <span class="n">catalog_ready_signal</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
 
 <span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
@@ -108,6 +123,17 @@
     <span class="p">(</span><span class="s2">"auto_off"</span><span class="p">,</span> <span class="s2">"setting_auto_off"</span><span class="p">),</span>
     <span class="p">(</span><span class="s2">"water_hardness"</span><span class="p">,</span> <span class="s2">"setting_water_hardness"</span><span class="p">),</span>
 <span class="p">]</span>
+
+
+<span class="c1">#: Custom-recipe slot ids (``0xE6``–``0xEB``) share one catalogue name.</span>
+<span class="n">_CUSTOM_SLOT_BASE</span> <span class="o">=</span> <span class="mi">229</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_beverage_label</span><span class="p">(</span><span class="n">bev</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Fallback label for a recipe without a command-map name."""</span>
+    <span class="k">if</span> <span class="n">bev</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s2">"custom"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"Custom </span><span class="si">{</span><span class="n">bev</span><span class="o">.</span><span class="n">bev_id</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">_CUSTOM_SLOT_BASE</span><span class="si">}</span><span class="s2">"</span>
+    <span class="k">return</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">bev</span><span class="p">,</span> <span class="s2">"name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">"Beverage </span><span class="si">{</span><span class="n">bev</span><span class="o">.</span><span class="n">bev_id</span><span class="si">}</span><span class="s2">"</span>
 
 
 <div class="viewcode-block" id="async_setup_entry">
@@ -126,6 +152,19 @@
         <span class="k">if</span> <span class="n">capabilities</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">capabilities</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">setting</span><span class="o">.</span><span class="n">capability</span><span class="p">,</span> <span class="kc">True</span><span class="p">):</span>
             <span class="k">continue</span>
         <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkSettingSelect</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">suffix</span><span class="p">))</span>
+
+    <span class="n">session</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"recipe_session"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">session</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkRecipeSelect</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">session</span><span class="p">))</span>
+
+    <span class="c1"># BeanAdapt machines advertise d25X_beansystem_1..6 in</span>
+    <span class="c1"># catalog_datapoints — a static map check, no machine read. Slot</span>
+    <span class="c1"># names/options land via the background priming below.</span>
+    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span>
+        <span class="n">re</span><span class="o">.</span><span class="n">fullmatch</span><span class="p">(</span><span class="sa">r</span><span class="s2">"d25\d_beansystem_[1-6]"</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">device</span><span class="p">,</span> <span class="s2">"catalog_datapoints"</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="p">):</span>
+        <span class="n">entities</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CremalinkBeanSelect</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">))</span>
 
     <span class="n">async_add_entities</span><span class="p">(</span><span class="n">entities</span><span class="p">)</span>
 
@@ -146,6 +185,7 @@
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="n">device</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_asleep</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_options_refresh_retry_at</span> <span class="o">=</span> <span class="mf">0.0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_connection_type</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_CONNECTION_TYPE</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_attr_device_info</span> <span class="o">=</span> <span class="n">DeviceInfo</span><span class="p">(</span>
             <span class="n">identifiers</span><span class="o">=</span><span class="p">{(</span><span class="n">DOMAIN</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)},</span>
@@ -171,7 +211,16 @@
         <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">awake</span> <span class="o">=</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">STANDBY_STATUSES</span> <span class="ow">and</span> <span class="n">status</span> <span class="o">!=</span> <span class="s2">"waking_up"</span>
-            <span class="k">if</span> <span class="n">awake</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_asleep</span><span class="p">:</span>
+            <span class="c1"># Retry a failed priming too — booted while the machine was</span>
+            <span class="c1"># already awake, the asleep-&gt;awake transition never happens,</span>
+            <span class="c1"># and a priming that raced the LAN registration would leave</span>
+            <span class="c1"># the select empty until a reload (live-observed).</span>
+            <span class="n">retry_due</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_needs_options_refresh</span><span class="p">()</span>
+                <span class="ow">and</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_options_refresh_retry_at</span> <span class="o">&gt;=</span> <span class="mi">60</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">awake</span> <span class="ow">and</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_asleep</span> <span class="ow">or</span> <span class="n">retry_due</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_options_refresh_retry_at</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_async_refresh_after_wake</span><span class="p">())</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_asleep</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">awake</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_handle_coordinator_update</span><span class="p">()</span>
@@ -179,6 +228,11 @@
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_refresh_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Refresh the option state; implemented by each concrete select."""</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_needs_options_refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""True while the machine-side options were never populated —</span>
+<span class="sd">        signals a failed priming that deserves a throttled retry."""</span>
+        <span class="k">return</span> <span class="kc">False</span>
 
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_refresh_after_wake</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_refresh_state</span><span class="p">()</span>
@@ -221,13 +275,38 @@
 <a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkProfileSelect.async_added_to_hass">[docs]</a>
     <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_added_to_hass</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">async_added_to_hass</span><span class="p">()</span>
-        <span class="n">last</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_state</span><span class="p">()</span>
-        <span class="n">index</span> <span class="o">=</span> <span class="p">(</span><span class="n">last</span><span class="o">.</span><span class="n">attributes</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"profile_index"</span><span class="p">)</span> <span class="k">if</span> <span class="n">last</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">extra</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_extra_data</span><span class="p">()</span>
+        <span class="n">stored</span> <span class="o">=</span> <span class="n">extra</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span> <span class="k">if</span> <span class="n">extra</span> <span class="k">else</span> <span class="p">{}</span>
+        <span class="n">slots</span> <span class="o">=</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"slots"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">slots</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span> <span class="o">=</span> <span class="p">{</span><span class="nb">str</span><span class="p">(</span><span class="n">name</span><span class="p">):</span> <span class="nb">int</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">slots</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">stored</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"profile_index"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="n">last</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_state</span><span class="p">()</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="p">(</span><span class="n">last</span><span class="o">.</span><span class="n">attributes</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"profile_index"</span><span class="p">)</span> <span class="k">if</span> <span class="n">last</span> <span class="k">else</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="n">index</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_restored_index</span> <span class="o">=</span> <span class="n">index</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_apply_restored</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_update_current_option</span><span class="p">()</span></div>
 
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_restore_state_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Persist slot names + remembered index — the standby case</span>
+<span class="sd">        cannot re-read ``get_profiles``, and the plain-state path loses</span>
+<span class="sd">        everything once an ``unknown`` state is saved."""</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_restored_index</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">RestoredExtraData</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">"slots"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span><span class="p">,</span>
+                <span class="s2">"profile_index"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="s2">"current_profile"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_restored_index</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_needs_options_refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_slots</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_apply_restored</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Hand the remembered selection to the device once slots are known."""</span>
@@ -309,10 +388,188 @@
 
 
 
+<div class="viewcode-block" id="CremalinkRecipeSelect">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkRecipeSelect</span><span class="p">(</span><span class="n">_BaseSelect</span><span class="p">,</span> <span class="n">RestoreEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Brewable-recipe picker — the single brew surface (spec FR-001..003).</span>
+
+<span class="sd">    Options are the machine-catalogued beverages (``beverage_catalog`` —</span>
+<span class="sd">    no duplicates, no one-shots). Selecting a recipe is local-only: it</span>
+<span class="sd">    clears the recipe session's overrides and re-arms the param load; no</span>
+<span class="sd">    machine write happens here. The load itself runs in the background</span>
+<span class="sd">    on coordinator updates via ``session.async_ensure_params``. The</span>
+<span class="sd">    entity is still gated on readiness like the profile select —</span>
+<span class="sd">    changing the selection while the machine sleeps would discard the</span>
+<span class="sd">    loaded overrides for a brew it cannot confirm anyway.</span>
+<span class="sd">    """</span>
+
+    <span class="n">_attr_entity_category</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># a control entity, not configuration</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">session</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span> <span class="o">=</span> <span class="n">session</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="s2">"recipe"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_recipe"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:coffee-maker-outline"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>  <span class="c1"># label -&gt; beverage_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_options_refetched_at</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_catalog_signal</span> <span class="o">=</span> <span class="n">catalog_ready_signal</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">)</span>
+
+<div class="viewcode-block" id="CremalinkRecipeSelect.async_added_to_hass">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.async_added_to_hass">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_added_to_hass</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Re-order the options once the cloud catalogue snapshot lands."""</span>
+        <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">async_added_to_hass</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">async_on_remove</span><span class="p">(</span>
+            <span class="n">async_dispatcher_connect</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_catalog_signal</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_on_catalog_ready</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+        <span class="c1"># Re-arm the last selected recipe so its param load re-queues on</span>
+        <span class="c1"># wake — only the selection is restored, never params/overrides</span>
+        <span class="c1"># (spec: session state is transient).</span>
+        <span class="n">last</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_extra_data</span><span class="p">()</span>
+        <span class="n">stored</span> <span class="o">=</span> <span class="n">last</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"selected_beverage"</span><span class="p">)</span> <span class="k">if</span> <span class="n">last</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stored</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="n">stored</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">stored</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_needs_options_refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_options</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_restore_state_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Persist the selected beverage id — without this HA stores</span>
+<span class="sd">        ``extra_data: null`` and the restore read always comes back</span>
+<span class="sd">        ``None`` (live-observed: recipe select showed ``unknown`` after</span>
+<span class="sd">        a restart despite a prior selection)."""</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">selected_beverage</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">selected</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="n">RestoredExtraData</span><span class="p">({</span><span class="s2">"selected_beverage"</span><span class="p">:</span> <span class="n">selected</span><span class="p">})</span>
+
+    <span class="nd">@callback</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_on_catalog_ready</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_async_refresh_after_wake</span><span class="p">())</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Unavailable while the machine is not ready — same gate as the</span>
+<span class="sd">        profile select (``NOT_READY_STATUSES``)."""</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">NOT_READY_STATUSES</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">available</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_awake</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">status</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">STANDBY_STATUSES</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_handle_coordinator_update</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Drive the session's param load and profile-change re-scope."""</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_create_task</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">async_ensure_params</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_awake</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">recipe_priority_loaded</span><span class="p">():</span>
+            <span class="c1"># Menu order is one cached GET per profile; retried at most</span>
+            <span class="c1"># once a minute so a slow machine is never polled per cycle.</span>
+            <span class="n">now</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">now</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_options_refetched_at</span> <span class="o">&gt;=</span> <span class="mi">60</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_options_refetched_at</span> <span class="o">=</span> <span class="n">now</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_create_task</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_async_refresh_after_wake</span><span class="p">())</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_handle_coordinator_update</span><span class="p">()</span>
+
+<div class="viewcode-block" id="CremalinkRecipeSelect.async_refresh_state">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.async_refresh_state">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_refresh_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Populate options (executor).</span>
+
+<span class="sd">        The recipe list itself is static (model table + command map —</span>
+<span class="sd">        zero machine requests), so options exist immediately, even in</span>
+<span class="sd">        standby or before the first monitor lands. Only the drink-menu</span>
+<span class="sd">        order needs the machine (one GET per profile, cached) and is</span>
+<span class="sd">        therefore fetched only while the machine is known to be awake</span>
+<span class="sd">        (protocol.md §13/§14.12, research.md R11).</span>
+<span class="sd">        """</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">beverages</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+                <span class="n">partial</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">beverage_catalog</span><span class="p">,</span> <span class="n">fetch_priority</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_awake</span><span class="p">())</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"beverage catalog fetch failed: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">beverages</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">bev</span> <span class="ow">in</span> <span class="n">beverages</span><span class="p">:</span>
+            <span class="n">entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">brew_entry</span><span class="p">(</span><span class="n">bev</span><span class="o">.</span><span class="n">bev_id</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{}</span>
+            <span class="n">label</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"name"</span><span class="p">)</span> <span class="ow">or</span> <span class="n">_beverage_label</span><span class="p">(</span><span class="n">bev</span><span class="p">)</span>
+            <span class="n">options</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">label</span><span class="p">,</span> <span class="n">bev</span><span class="o">.</span><span class="n">bev_id</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_options</span> <span class="o">=</span> <span class="n">options</span>
+        <span class="c1"># The priming task can outrun entity attachment (hass is None</span>
+        <span class="c1"># until added) — the next coordinator update writes state then.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">async_write_ha_state</span><span class="p">()</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_options</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">current_option</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">next</span><span class="p">(</span>
+            <span class="p">(</span>
+                <span class="n">label</span>
+                <span class="k">for</span> <span class="n">label</span><span class="p">,</span> <span class="n">bid</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_options</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">bid</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">selected_beverage</span>
+            <span class="p">),</span>
+            <span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_state_attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">attrs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">selected_beverage</span><span class="p">:</span>
+            <span class="n">attrs</span><span class="p">[</span><span class="s2">"selected_beverage"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">selected_beverage</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">params</span>
+        <span class="k">if</span> <span class="n">params</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">attrs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">"beverage_id"</span><span class="p">:</span> <span class="n">params</span><span class="o">.</span><span class="n">beverage_id</span><span class="p">,</span>
+                    <span class="s2">"values_source"</span><span class="p">:</span> <span class="n">params</span><span class="o">.</span><span class="n">source</span><span class="p">,</span>
+                    <span class="o">**</span><span class="p">({</span><span class="s2">"bean_slot"</span><span class="p">:</span> <span class="n">params</span><span class="o">.</span><span class="n">bean_slot</span><span class="p">}</span> <span class="k">if</span> <span class="n">params</span><span class="o">.</span><span class="n">bean_slot</span> <span class="k">else</span> <span class="p">{}),</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">attrs</span> <span class="ow">or</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="CremalinkRecipeSelect.async_select_option">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkRecipeSelect.async_select_option">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_select_option</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">option</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">beverage_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">option</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">beverage_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"unknown recipe option </span><span class="si">{</span><span class="n">option</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">beverage_id</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">async_write_ha_state</span><span class="p">()</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">async_ensure_params</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="p">)</span>
+        <span class="c1"># Persist immediately — the 15-min persist cycle could lose a</span>
+        <span class="c1"># selection made shortly before a restart (bean select does</span>
+        <span class="c1"># the same).</span>
+        <span class="k">await</span> <span class="n">RestoreStateData</span><span class="o">.</span><span class="n">async_save_persistent_states</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">)</span></div>
+</div>
+
+
+
 <div class="viewcode-block" id="CremalinkSettingSelect">
 <a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkSettingSelect">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkSettingSelect</span><span class="p">(</span><span class="n">_BaseSelect</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Writable machine setting backed by a session-gated 0x90 write."""</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkSettingSelect</span><span class="p">(</span><span class="n">_BaseSelect</span><span class="p">,</span> <span class="n">RestoreEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Writable machine setting backed by a session-gated 0x90 write.</span>
+
+<span class="sd">    ``RestoreEntity``: standby blocks the settings re-read, so the last</span>
+<span class="sd">    machine-confirmed option survives a restart; the next successful</span>
+<span class="sd">    ``0x95`` read still wins.</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">suffix</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
@@ -322,6 +579,15 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="n">suffix</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:cog"</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_current_option</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="CremalinkSettingSelect.async_added_to_hass">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkSettingSelect.async_added_to_hass">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_added_to_hass</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">async_added_to_hass</span><span class="p">()</span>
+        <span class="n">last</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_state</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">last</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">last</span><span class="o">.</span><span class="n">state</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_setting</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_current_option</span> <span class="o">=</span> <span class="n">last</span><span class="o">.</span><span class="n">state</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_label_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -399,6 +665,125 @@
         <span class="k">if</span> <span class="n">values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">values</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">index</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">async_write_ha_state</span><span class="p">()</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CremalinkBeanSelect">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CremalinkBeanSelect</span><span class="p">(</span><span class="n">_BaseSelect</span><span class="p">,</span> <span class="n">RestoreEntity</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""BeanAdapt bean-system picker — options carry the user-assigned</span>
+<span class="sd">    bean names from the ``d25X`` blobs (``Device.bean_systems``).</span>
+
+<span class="sd">    Selecting sends the real selection frame ``0xB9``</span>
+<span class="sd">    (``device.select_bean_system``) — a session-gated write on §13's</span>
+<span class="sd">    untested list, so the entity is gated on readiness like the profile</span>
+<span class="sd">    select. ``current_option`` always reflects the machine's flagged</span>
+<span class="sd">    bean, never a locally remembered choice. The options+selection are</span>
+<span class="sd">    persisted: standby blocks ``d25X`` re-reads, so a restart would</span>
+<span class="sd">    otherwise leave the select empty until wake (FR-035 pattern).</span>
+<span class="sd">    """</span>
+
+    <span class="n">_attr_entity_category</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># a control entity, not configuration</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">coordinator</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_translation_key</span> <span class="o">=</span> <span class="s2">"bean_system"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_unique_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_bean_system"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_attr_icon</span> <span class="o">=</span> <span class="s2">"mdi:beans"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># BeanSystem list from device.bean_systems()</span>
+
+<div class="viewcode-block" id="CremalinkBeanSelect.async_added_to_hass">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.async_added_to_hass">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_added_to_hass</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">async_added_to_hass</span><span class="p">()</span>
+        <span class="n">last</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_extra_data</span><span class="p">()</span>
+        <span class="n">stored</span> <span class="o">=</span> <span class="p">(</span><span class="n">last</span><span class="o">.</span><span class="n">as_dict</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"bean_systems"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])</span> <span class="k">if</span> <span class="n">last</span> <span class="k">else</span> <span class="p">[]</span>
+        <span class="n">systems</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">BeanSystem</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s2">"slot"</span><span class="p">]),</span> <span class="nb">str</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s2">"name"</span><span class="p">]),</span> <span class="nb">bool</span><span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"selected"</span><span class="p">)))</span>
+            <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">stored</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"slot"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"name"</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="k">if</span> <span class="n">systems</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span> <span class="o">=</span> <span class="n">systems</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_needs_options_refresh</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_state_attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">"bean_systems"</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s2">"slot"</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">slot</span><span class="p">,</span> <span class="s2">"name"</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s2">"selected"</span><span class="p">:</span> <span class="n">s</span><span class="o">.</span><span class="n">selected</span><span class="p">}</span>
+                <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span>
+            <span class="p">]</span>
+        <span class="p">}</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_restore_state_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Persist options+selection for the standby case — without</span>
+<span class="sd">        this HA stores ``extra_data: null`` and ``d25X`` blobs cannot</span>
+<span class="sd">        be re-read while the machine sleeps."""</span>
+        <span class="n">attrs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">extra_state_attributes</span>
+        <span class="k">return</span> <span class="n">RestoredExtraData</span><span class="p">(</span><span class="n">attrs</span><span class="p">)</span> <span class="k">if</span> <span class="n">attrs</span> <span class="k">else</span> <span class="kc">None</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Unavailable while the machine is not ready — a ``0xB9``</span>
+<span class="sd">        selection is a write, gated like the profile select."""</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">data</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">"status_name"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="k">if</span> <span class="n">data</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">NOT_READY_STATUSES</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">available</span>
+
+<div class="viewcode-block" id="CremalinkBeanSelect.async_refresh_state">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.async_refresh_state">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_refresh_state</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">systems</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinator</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">bean_systems</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">OSError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">,</span> <span class="ne">RuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+            <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"bean-system fetch failed: </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="n">systems</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span> <span class="o">=</span> <span class="n">systems</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">s</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span><span class="p">]</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">current_option</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">selected</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">selected</span><span class="o">.</span><span class="n">name</span> <span class="k">if</span> <span class="n">selected</span> <span class="k">else</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="CremalinkBeanSelect.async_select_option">
+<a class="viewcode-back" href="../../api/cremalink_ha.select.html#cremalink_ha.select.CremalinkBeanSelect.async_select_option">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_select_option</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">option</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="nb">next</span><span class="p">((</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_systems</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">option</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">selected</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"unknown bean-system option </span><span class="si">{</span><span class="n">option</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">ok</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">select_bean_system</span><span class="p">,</span> <span class="n">selected</span><span class="o">.</span><span class="n">slot</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">HomeAssistantError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">"The machine rejected the bean-system change to </span><span class="si">{</span><span class="n">option</span><span class="si">}</span><span class="s2">."</span>
+            <span class="p">)</span>
+        <span class="c1"># Machine confirmed (or nack-free like 0xA9) — re-read the blobs</span>
+        <span class="c1"># so current_option follows the machine's flag, not our choice.</span>
+        <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_refresh_state</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">async_write_ha_state</span><span class="p">()</span>
+        <span class="c1"># Persist immediately — the 15-min persist cycle could lose a</span>
+        <span class="c1"># selection made shortly before a restart (profile select does</span>
+        <span class="c1"># the same).</span>
+        <span class="k">await</span> <span class="n">RestoreStateData</span><span class="o">.</span><span class="n">async_save_persistent_states</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hass</span><span class="p">)</span></div>
 </div>
 
 </pre></div>

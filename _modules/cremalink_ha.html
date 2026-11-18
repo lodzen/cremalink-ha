@@ -79,6 +79,7 @@
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 
@@ -90,6 +91,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">entity_registry</span> <span class="k">as</span> <span class="n">er</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">issue_registry</span> <span class="k">as</span> <span class="n">ir</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers</span><span class="w"> </span><span class="kn">import</span> <span class="n">translation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.dispatcher</span><span class="w"> </span><span class="kn">import</span> <span class="n">async_dispatcher_send</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">cremalink</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Client</span><span class="p">,</span>
@@ -118,8 +120,10 @@
     <span class="n">DEVICE_NAME</span><span class="p">,</span>
     <span class="n">DOMAIN</span><span class="p">,</span>
     <span class="n">REPAIR_RECONFIGURE_REQUIRED</span><span class="p">,</span>
+    <span class="n">catalog_ready_signal</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CremalinkCoordinator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.recipe_session</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecipeSession</span>
 
 <span class="n">_LOGGER</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
 
@@ -129,6 +133,7 @@
     <span class="n">Platform</span><span class="o">.</span><span class="n">SENSOR</span><span class="p">,</span>
     <span class="n">Platform</span><span class="o">.</span><span class="n">BINARY_SENSOR</span><span class="p">,</span>
     <span class="n">Platform</span><span class="o">.</span><span class="n">SELECT</span><span class="p">,</span>
+    <span class="n">Platform</span><span class="o">.</span><span class="n">NUMBER</span><span class="p">,</span>
 <span class="p">]</span>
 
 <span class="c1">#: Belt-and-suspenders bound on top of embedded.py's own site shutdown_timeout --</span>
@@ -293,6 +298,12 @@
                 <span class="n">advertised_ip</span><span class="o">=</span><span class="n">advertised_ip</span><span class="p">,</span>
                 <span class="n">monitor_poll_interval</span><span class="o">=</span><span class="n">DEFAULT_MONITOR_POLL_INTERVAL</span><span class="p">,</span>
                 <span class="n">nudger_poll_interval</span><span class="o">=</span><span class="n">DEFAULT_NUDGER_POLL_INTERVAL</span><span class="p">,</span>
+                <span class="c1"># Cloud-side session recovery: when local_reg keeps failing</span>
+                <span class="c1"># (machine's LAN module down), the server announces</span>
+                <span class="c1"># device_connected via the Ayla cloud channel — the same</span>
+                <span class="c1"># write the app uses (research.md R17). No token → skipped.</span>
+                <span class="n">cloud_token_path</span><span class="o">=</span><span class="n">entry</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_TOKEN_FILE</span><span class="p">)</span>
+                <span class="ow">or</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_TOKEN_FILE</span><span class="p">),</span>
                 <span class="n">event_logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">await</span> <span class="n">embedded_server</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
@@ -370,6 +381,7 @@
         <span class="s2">"coordinator"</span><span class="p">:</span> <span class="n">coordinator</span><span class="p">,</span>
         <span class="s2">"device"</span><span class="p">:</span> <span class="n">device</span><span class="p">,</span>
         <span class="s2">"embedded_server"</span><span class="p">:</span> <span class="n">embedded_server</span><span class="p">,</span>
+        <span class="s2">"recipe_session"</span><span class="p">:</span> <span class="n">RecipeSession</span><span class="p">(</span><span class="n">device</span><span class="p">),</span>
     <span class="p">}</span>
     <span class="n">entry</span><span class="o">.</span><span class="n">async_on_unload</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">add_update_listener</span><span class="p">(</span><span class="n">_async_options_updated</span><span class="p">))</span>
 
@@ -386,8 +398,68 @@
     <span class="n">entry</span><span class="o">.</span><span class="n">async_create_background_task</span><span class="p">(</span>
         <span class="n">hass</span><span class="p">,</span> <span class="n">coordinator</span><span class="o">.</span><span class="n">async_refresh</span><span class="p">(),</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">DOMAIN</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_first_refresh"</span>
     <span class="p">)</span>
+    <span class="k">if</span> <span class="n">connection_type</span> <span class="o">==</span> <span class="n">CONNECTION_LOCAL</span><span class="p">:</span>
+        <span class="n">entry</span><span class="o">.</span><span class="n">async_create_background_task</span><span class="p">(</span>
+            <span class="n">hass</span><span class="p">,</span>
+            <span class="n">_async_preload_catalog</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">entry</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">dsn</span><span class="p">),</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">DOMAIN</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="si">}</span><span class="s2">_cloud_catalog"</span><span class="p">,</span>
+        <span class="p">)</span>
     <span class="k">return</span> <span class="kc">True</span></div>
 
+
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_preload_catalog</span><span class="p">(</span>
+    <span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">dsn</span><span class="p">:</span> <span class="nb">str</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Seed the recipe catalogue from ONE cloud request (the app's store sync).</span>
+
+<span class="sd">    Coffee Link fills its property store with a single cloud</span>
+<span class="sd">    ``properties.json`` fetch and never queries recipes per machine</span>
+<span class="sd">    (research.md R11). Over LAN every named GET costs a ~1.3 s slot on</span>
+<span class="sd">    the machine's one-payload-per-poll lane (protocol.md §14.12), so the</span>
+<span class="sd">    cloud snapshot supplies the factory descriptors and menu orders for</span>
+<span class="sd">    free. Optional: without a stored cloud token — or on any cloud</span>
+<span class="sd">    failure — the library's lazy LAN reads (one GET per use, cached)</span>
+<span class="sd">    remain the backup, so nothing here may raise.</span>
+<span class="sd">    """</span>
+    <span class="n">token_file</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_TOKEN_FILE</span><span class="p">)</span> <span class="ow">or</span> <span class="n">entry</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">CONF_TOKEN_FILE</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">token_file</span><span class="p">:</span>
+        <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">"Cloud catalogue preload skipped: no cloud token stored for </span><span class="si">%s</span><span class="s2">"</span><span class="p">,</span> <span class="n">dsn</span>
+        <span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fetch_and_seed</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="n">client</span> <span class="o">=</span> <span class="n">Client</span><span class="p">(</span><span class="n">token_file</span><span class="p">,</span> <span class="n">logger</span><span class="o">=</span><span class="n">_LOGGER</span><span class="p">)</span>
+        <span class="n">properties</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">fetch_properties</span><span class="p">(</span><span class="n">dsn</span><span class="p">)</span>
+        <span class="n">seeded</span> <span class="o">=</span> <span class="n">device</span><span class="o">.</span><span class="n">seed_catalog_from_properties</span><span class="p">(</span><span class="n">properties</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">properties</span><span class="p">),</span> <span class="n">seeded</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span>
+        <span class="n">fetched</span><span class="p">,</span> <span class="n">seeded</span> <span class="o">=</span> <span class="k">await</span> <span class="n">hass</span><span class="o">.</span><span class="n">async_add_executor_job</span><span class="p">(</span><span class="n">_fetch_and_seed</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 - any failure falls back to LAN reads</span>
+        <span class="n">_LOGGER</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="s2">"Cloud catalogue unavailable (</span><span class="si">%s</span><span class="s2">); using lazy LAN reads"</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">err</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="p">)</span>
+        <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Cloud catalogue preload failed for </span><span class="si">%s</span><span class="s2">: </span><span class="si">%r</span><span class="s2">"</span><span class="p">,</span> <span class="n">dsn</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+        <span class="k">return</span>
+    <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+        <span class="s2">"Cloud catalogue seeded </span><span class="si">%d</span><span class="s2"> recipe descriptors from </span><span class="si">%d</span><span class="s2"> cloud "</span>
+        <span class="s2">"properties in </span><span class="si">%.1f</span><span class="s2"> s (descriptors + menu orders now cached; "</span>
+        <span class="s2">"recipe values stay live reads)"</span><span class="p">,</span>
+        <span class="n">seeded</span><span class="p">,</span>
+        <span class="n">fetched</span><span class="p">,</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">monotonic</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">seeded</span><span class="p">:</span>
+        <span class="n">async_dispatcher_send</span><span class="p">(</span><span class="n">hass</span><span class="p">,</span> <span class="n">catalog_ready_signal</span><span class="p">(</span><span class="n">entry</span><span class="o">.</span><span class="n">entry_id</span><span class="p">))</span>
+        <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">"Cloud catalogue ready signal dispatched"</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">_LOGGER</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+            <span class="s2">"Cloud catalogue seed produced 0 descriptors — lazy LAN reads "</span>
+            <span class="s2">"remain the fallback"</span>
+        <span class="p">)</span>
 
 
 <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_async_options_updated</span><span class="p">(</span><span class="n">hass</span><span class="p">:</span> <span class="n">HomeAssistant</span><span class="p">,</span> <span class="n">entry</span><span class="p">:</span> <span class="n">ConfigEntry</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>

@@ -64,10 +64,13 @@
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.DEFAULT_FAILURE_THRESHOLD"><code class="docutils literal notranslate"><span class="pre">DEFAULT_FAILURE_THRESHOLD</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.MONITOR_ATTEMPTS"><code class="docutils literal notranslate"><span class="pre">MONITOR_ATTEMPTS</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.SETTINGS_INTERVAL"><code class="docutils literal notranslate"><span class="pre">SETTINGS_INTERVAL</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.STATISTICS_BREW_SETTLE_SECONDS"><code class="docutils literal notranslate"><span class="pre">STATISTICS_BREW_SETTLE_SECONDS</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.coordinator.STATISTICS_INTERVAL"><code class="docutils literal notranslate"><span class="pre">STATISTICS_INTERVAL</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html">cremalink_ha.number module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html">cremalink_ha.recipe_session module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html">cremalink_ha.select module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.sensor.html">cremalink_ha.sensor module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.switch.html">cremalink_ha.switch module</a></li>
@@ -151,6 +154,15 @@ lost reply must not count as a refresh failure.</p>
 <code class="docutils literal notranslate"><span class="pre">dNNN</span></code> datapoint within ~6 s of a <code class="docutils literal notranslate"><span class="pre">request_property</span></code> GET
 (protocol.md §14.11); 15 s keeps HA state close to the machine without
 flooding the single-GET-per-poll command queue.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="cremalink_ha.coordinator.STATISTICS_BREW_SETTLE_SECONDS">
+<span class="sig-prename descclassname"><span class="pre">cremalink_ha.coordinator.</span></span><span class="sig-name descname"><span class="pre">STATISTICS_BREW_SETTLE_SECONDS</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">10.0</span></span><a class="headerlink" href="#cremalink_ha.coordinator.STATISTICS_BREW_SETTLE_SECONDS" title="Link to this definition"></a></dt>
+<dd><p>Delay between a status transition into <code class="docutils literal notranslate"><span class="pre">ready</span></code> (a brew/hot-water/
+cleaning cycle just ended) and a statistics refresh — the machine
+commits its 0xA2 counters at pour end, so an immediate read can still
+see the pre-commit table.</p>
 </dd></dl>
 
 <dl class="py data">

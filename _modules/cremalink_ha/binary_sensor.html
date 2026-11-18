@@ -85,6 +85,7 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">EntityCategory</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.entity</span><span class="w"> </span><span class="kn">import</span> <span class="n">DeviceInfo</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.restore_state</span><span class="w"> </span><span class="kn">import</span> <span class="n">RestoreEntity</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">homeassistant.helpers.update_coordinator</span><span class="w"> </span><span class="kn">import</span> <span class="n">CoordinatorEntity</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.const</span><span class="w"> </span><span class="kn">import</span> <span class="n">CONF_CONNECTION_TYPE</span><span class="p">,</span> <span class="n">DOMAIN</span><span class="p">,</span> <span class="n">STANDBY_STATUSES</span>
@@ -160,7 +161,7 @@
 <div class="viewcode-block" id="CremalinkBinarySensor">
 <a class="viewcode-back" href="../../api/cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">CremalinkBinarySensor</span><span class="p">(</span>
-    <span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">BinarySensorEntity</span>
+    <span class="n">CoordinatorEntity</span><span class="p">[</span><span class="n">CremalinkCoordinator</span><span class="p">],</span> <span class="n">BinarySensorEntity</span><span class="p">,</span> <span class="n">RestoreEntity</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Representation of a Cremalink binary sensor."""</span>
 
@@ -193,6 +194,38 @@
         <span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="o">=</span> <span class="kc">None</span>
+
+<div class="viewcode-block" id="CremalinkBinarySensor.async_added_to_hass">
+<a class="viewcode-back" href="../../api/cremalink_ha.binary_sensor.html#cremalink_ha.binary_sensor.CremalinkBinarySensor.async_added_to_hass">[docs]</a>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">async_added_to_hass</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">await</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">async_added_to_hass</span><span class="p">()</span>
+        <span class="c1"># Standby monitor frames carry no evaluatable bits — the live</span>
+        <span class="c1"># reading lands only after the next wake, so the standby cache is</span>
+        <span class="c1"># seeded from the restored state (US7: no "unknown" after restart).</span>
+        <span class="c1"># The saved state itself is often "unknown" (standby already hid</span>
+        <span class="c1"># the bits when it was persisted) — then the last *known* value</span>
+        <span class="c1"># survives in the attributes instead.</span>
+        <span class="n">last</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">async_get_last_state</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">last</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="n">state</span> <span class="o">=</span> <span class="n">last</span><span class="o">.</span><span class="n">state</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"on"</span><span class="p">,</span> <span class="s2">"off"</span><span class="p">):</span>
+            <span class="n">state</span> <span class="o">=</span> <span class="n">last</span><span class="o">.</span><span class="n">attributes</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"last_known_state"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">state</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"on"</span><span class="p">,</span> <span class="s2">"off"</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="o">=</span> <span class="n">state</span> <span class="o">==</span> <span class="s2">"on"</span></div>
+
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">extra_state_attributes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Persist the last live reading — it survives "unknown" states.</span>
+
+<span class="sd">        ``_standby_cache`` is updated on every successful read, so this</span>
+<span class="sd">        attribute always carries the newest confirmed bit even when the</span>
+<span class="sd">        visible state is unknown (standby frames without bits).</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">"last_known_state"</span><span class="p">:</span> <span class="s2">"on"</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_standby_cache</span> <span class="k">else</span> <span class="s2">"off"</span><span class="p">}</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">available</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>

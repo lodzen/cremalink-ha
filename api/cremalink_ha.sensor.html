@@ -61,6 +61,8 @@
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.const.html">cremalink_ha.const module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.coordinator.html">cremalink_ha.coordinator module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.diagnostics.html">cremalink_ha.diagnostics module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.number.html">cremalink_ha.number module</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cremalink_ha.recipe_session.html">cremalink_ha.recipe_session module</a></li>
 <li class="toctree-l3"><a class="reference internal" href="cremalink_ha.select.html">cremalink_ha.select module</a></li>
 <li class="toctree-l3 current"><a class="current reference internal" href="#">cremalink_ha.sensor module</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="#cremalink_ha.sensor.CremalinkCloudCounterSensor"><code class="docutils literal notranslate"><span class="pre">CremalinkCloudCounterSensor</span></code></a></li>
@@ -109,7 +111,7 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkCloudCounterSensor">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.sensor.</span></span><span class="sig-name descname"><span class="pre">CremalinkCloudCounterSensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/sensor.html#CremalinkCloudCounterSensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.sensor.CremalinkCloudCounterSensor" title="Link to this definition"></a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_CremalinkEntityBase</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">SensorEntity</span></code></p>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_StatisticsSensorBase</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">SensorEntity</span></code></p>
 <p>Cloud-counter statistics sensor backed by the Ayla datapoint cache.</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkCloudCounterSensor.extra_state_attributes">
@@ -129,8 +131,23 @@ is lowercase snake_case.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkSensor">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.sensor.</span></span><span class="sig-name descname"><span class="pre">CremalinkSensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/sensor.html#CremalinkSensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.sensor.CremalinkSensor" title="Link to this definition"></a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_CremalinkEntityBase</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">SensorEntity</span></code></p>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_CremalinkEntityBase</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">SensorEntity</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">RestoreEntity</span></code></p>
 <p>Representation of a Cremalink monitor sensor.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkSensor.async_added_to_hass">
+<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">async_added_to_hass</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/sensor.html#CremalinkSensor.async_added_to_hass"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.sensor.CremalinkSensor.async_added_to_hass" title="Link to this definition"></a></dt>
+<dd><p>When entity is added to hass.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkSensor.extra_state_attributes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">extra_state_attributes</span></span><a class="headerlink" href="#cremalink_ha.sensor.CremalinkSensor.extra_state_attributes" title="Link to this definition"></a></dt>
+<dd><p>Persist the last live reading — it survives “unknown” states.</p>
+<p><code class="docutils literal notranslate"><span class="pre">_standby_cache</span></code> is updated on every successful read, so this
+attribute carries the newest confirmed value even while the
+visible state is unknown (standby frames without the field).</p>
+</dd></dl>
+
 <dl class="py property">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkSensor.native_value">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">native_value</span></span><a class="headerlink" href="#cremalink_ha.sensor.CremalinkSensor.native_value" title="Link to this definition"></a></dt>
@@ -142,7 +159,7 @@ is lowercase snake_case.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkStatisticSensor">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">cremalink_ha.sensor.</span></span><span class="sig-name descname"><span class="pre">CremalinkStatisticSensor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/cremalink_ha/sensor.html#CremalinkStatisticSensor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#cremalink_ha.sensor.CremalinkStatisticSensor" title="Link to this definition"></a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_CremalinkEntityBase</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">SensorEntity</span></code></p>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">_StatisticsSensorBase</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">SensorEntity</span></code></p>
 <p>Native 0xA2 statistics sensor (LAN-only).</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="cremalink_ha.sensor.CremalinkStatisticSensor.native_value">
