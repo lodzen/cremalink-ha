@@ -152,6 +152,12 @@
       "stat_water_filter_quantity": { "name": "Wassermenge Filter" },
       "stat_descale_status": { "name": "Entkalkungsstatus" },
       "stat_water_hardness": { "name": "Wasserhärte" },
+      "stat_grounds_container_percentage": { "name": "Kaffeesatzbehälter" },
+      "stat_descale_percentage": { "name": "Entkalkung" },
+      "stat_filter_percentage": { "name": "Filterverbrauch" },
+      "stat_aborted_beverages": { "name": "Abgebrochene Getränke" },
+      "stat_iced_beverages": { "name": "Eisgetränke" },
+      "stat_cold_brew_beverages": { "name": "Cold-Brew-Getränke" },
       "cremalink_status_name": {
         "name": "Status",
         "state": {

@@ -268,6 +268,12 @@
       "stat_water_filter_quantity": { "name": "Water Filter Quantity" },
       "stat_descale_status": { "name": "Descale Status" },
       "stat_water_hardness": { "name": "Water Hardness" },
+      "stat_grounds_container_percentage": { "name": "Grounds Container Percentage" },
+      "stat_descale_percentage": { "name": "Descale Percentage" },
+      "stat_filter_percentage": { "name": "Filter Percentage" },
+      "stat_aborted_beverages": { "name": "Aborted Beverages" },
+      "stat_iced_beverages": { "name": "Iced Beverages" },
+      "stat_cold_brew_beverages": { "name": "Cold Brew Beverages" },
       "cremalink_status_name": {
         "name": "Status",
         "state": {
