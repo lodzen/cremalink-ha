@@ -7,8 +7,9 @@ the user's pending raw overrides — all transient per spec (no persistence,
 cleared on recipe/profile change so nothing leaks across recipes).
 
 Machine I/O never happens here directly: ``async_ensure_params`` schedules
-the library's blocking ``recipe_params`` read on the executor exactly
-once per (recipe, profile) pair; entities watch ``loading``/``params``.
+the library's blocking ``recipe_params`` read on the executor once per
+(recipe, profile) pair (again after a backoff while only the ``default``
+fallback could be read); entities watch ``loading``/``params``.
 """
 
 import asyncio
@@ -33,6 +34,11 @@ _LOGGER = logging.getLogger(__name__)
 #: requests on every coordinator poll.
 LOAD_RETRY_INTERVAL = 60.0
 
+#: How often a ``default`` fallback is re-read before giving up until the
+#: recipe or profile changes — a machine whose profile values can never be
+#: read must not be asked once a minute forever.
+MAX_DEFAULT_RETRIES = 5
+
 
 @dataclass
 class RecipeSession:
@@ -46,6 +52,7 @@ class RecipeSession:
     _profile_seen: int = 0
     _load_task: asyncio.Task | None = field(default=None, repr=False)
     _last_attempt: float | None = field(default=None, repr=False)
+    _default_reads: int = field(default=0, repr=False)
 
     def select(self, beverage_id: int) -> None:
         """Select a recipe — discards the previous recipe's values/overrides."""
@@ -54,6 +61,7 @@ class RecipeSession:
         self.params = None
         self.overrides.clear()
         self._last_attempt = None  # a new selection retries immediately
+        self._default_reads = 0
 
     def clear(self) -> None:
         """Drop the selection entirely (values and overrides with it)."""
@@ -107,7 +115,15 @@ class RecipeSession:
         if self._profile_changed() and self.selected_beverage is not None:
             self.params = None
             self.overrides.clear()
-        if self.selected_beverage is None or self.params is not None or self.loading:
+            self._default_reads = 0
+        if self.selected_beverage is None or self.loading:
+            return
+        # A fallback read (``source="default"``: the profile's values were
+        # not readable yet, e.g. right after a restart) is retried after
+        # the backoff; the fallback stays in place until real values land.
+        if self.params is not None and (
+            self.params.source != "default" or self._default_reads > MAX_DEFAULT_RETRIES
+        ):
             return
         data = coordinator.data
         status = getattr(data, "status_name", None)
@@ -135,6 +151,9 @@ class RecipeSession:
             # A recipe switch mid-flight must not accept stale values.
             if beverage_id == self.selected_beverage:
                 self.params = params
+                if params.source == "default":
+                    self._last_attempt = time.monotonic()
+                    self._default_reads += 1
         except (OSError, ValueError, RuntimeError) as err:
             _LOGGER.debug("recipe params load failed for %s: %s", beverage_id, err)
             self._last_attempt = time.monotonic()

@@ -2,6 +2,7 @@
 
 from cremalink.domain.device import RecipeParams
 from custom_components.cremalink_ha import number as number_mod
+from custom_components.cremalink_ha.recipe_session import MAX_DEFAULT_RETRIES
 
 from tests.helpers import (
     FakeMonitorData,
@@ -186,3 +187,86 @@ class TestProfileRescope:
         await session.async_ensure_params(hass, coordinator)
         await hass.async_block_till_done()
         assert loads == [0x01]  # one load per (recipe, profile)
+
+
+class TestDefaultFallbackRetry:
+    @staticmethod
+    def _params(source):
+        return RecipeParams(
+            beverage_id=0x01,
+            profile_slot=1,
+            values={1: 60},
+            bounds={1: (30, 40, 60)},
+            source=source,
+        )
+
+    async def test_default_fallback_is_retried_until_profile_values(self, hass):
+        """A fallback read (machine not answering yet) must not stick."""
+        results = [self._params("default"), self._params("profile")]
+        calls = []
+
+        def _load(bid, **_):
+            calls.append(bid)
+            return results[len(calls) - 1]
+
+        coordinator, _, session = await _setup(hass, number_mod, recipe_params=_load)
+        session.select(0x01)
+        await session.async_ensure_params(hass, coordinator)
+        await hass.async_block_till_done()
+        assert session.params.source == "default"
+        # Backoff: no retry right away.
+        await session.async_ensure_params(hass, coordinator)
+        await hass.async_block_till_done()
+        assert len(calls) == 1
+        # After the backoff the profile values replace the fallback.
+        session._last_attempt -= 61.0
+        await session.async_ensure_params(hass, coordinator)
+        await hass.async_block_till_done()
+        assert len(calls) == 2
+        assert session.params.source == "profile"
+        # And then they stay: no further loads.
+        session._last_attempt -= 61.0
+        await session.async_ensure_params(hass, coordinator)
+        await hass.async_block_till_done()
+        assert len(calls) == 2
+
+    async def test_fallback_stays_while_retry_fails(self, hass):
+        calls = []
+
+        def _load(bid, **_):
+            calls.append(bid)
+            if len(calls) == 1:
+                return self._params("default")
+            raise RuntimeError("transport down")
+
+        coordinator, _, session = await _setup(hass, number_mod, recipe_params=_load)
+        session.select(0x01)
+        await session.async_ensure_params(hass, coordinator)
+        await hass.async_block_till_done()
+        session._last_attempt -= 61.0
+        await session.async_ensure_params(hass, coordinator)
+        await hass.async_block_till_done()
+        assert len(calls) == 2
+        assert session.params.source == "default"
+
+    async def test_fallback_retries_stop_after_the_cap(self, hass):
+        calls = []
+
+        def _load(bid, **_):
+            calls.append(bid)
+            return self._params("default")
+
+        coordinator, _, session = await _setup(hass, number_mod, recipe_params=_load)
+        session.select(0x01)
+        for _ in range(MAX_DEFAULT_RETRIES + 4):
+            await session.async_ensure_params(hass, coordinator)
+            await hass.async_block_till_done()
+            if session._last_attempt is not None:
+                session._last_attempt -= 61.0
+        # First read plus MAX_DEFAULT_RETRIES retries, then no more.
+        assert len(calls) == MAX_DEFAULT_RETRIES + 1
+        # A new selection starts over.
+        session.select(0x01)
+        await session.async_ensure_params(hass, coordinator)
+        await hass.async_block_till_done()
+        assert len(calls) == MAX_DEFAULT_RETRIES + 2

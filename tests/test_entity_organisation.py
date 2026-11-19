@@ -717,7 +717,11 @@ class TestRestartRestore:
             select_mod,
             FakeMonitorData(status_name="in_standby"),
             recipe_params=lambda bid, **_: loads.append(bid)
-            or type("P", (), {"beverage_id": bid, "profile_slot": 1})(),
+            or type(
+                "P",
+                (),
+                {"beverage_id": bid, "profile_slot": 1, "source": "profile"},
+            )(),
         )
         select = _by_uid(entities, "entry1_recipe")
         select.async_get_last_extra_data = AsyncMock(
