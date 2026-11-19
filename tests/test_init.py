@@ -200,6 +200,20 @@ class TestLifecycle:
 
         assert server.state == "stopped"
 
+    async def test_unload_cancels_a_running_slow_lane_round(self, hass):
+        """A running slow-lane round must not outlive the config entry."""
+        entry = make_entry(data=_local_entry_data())
+        entry.add_to_hass(hass)
+        await init_mod.async_setup_entry(hass, entry)
+        coordinator = hass.data[init_mod.DOMAIN][entry.entry_id]["coordinator"]
+        task = asyncio.ensure_future(asyncio.sleep(60))
+        coordinator._slow_lanes_task = task
+
+        await entry._async_process_on_unload(hass)
+        await asyncio.sleep(0)
+
+        assert task.cancelled()
+
     async def test_reload_stops_old_server_before_new_one_starts(self, hass):
         entry = make_entry(data=_local_entry_data())
         entry.add_to_hass(hass)

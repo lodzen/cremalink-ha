@@ -294,6 +294,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ),
     )
 
+    # Cancels a running slow-lane round when the entry unloads or reloads.
+    entry.async_on_unload(coordinator.async_shutdown)
+
     if embedded_server is not None:
         entry.async_on_unload(partial(_async_bounded_stop, embedded_server, dsn))
 

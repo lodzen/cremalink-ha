@@ -216,6 +216,7 @@ class TestCoordinatorSlowLane:
             hass, make_entry(), device, sensor_mod, monitor
         )
         await coordinator._async_update_data()
+        await hass.async_block_till_done()
         assert calls == [1]
         assert coordinator.statistics is report
         assert coordinator.statistics_supported is True
@@ -237,9 +238,11 @@ class TestCoordinatorSlowLane:
         )
         coordinator._statistics_fetched_at = -(10**9)  # force "due"
         await coordinator._async_update_data()
+        await hass.async_block_till_done()
         assert coordinator.statistics_supported is False
         coordinator._statistics_fetched_at = -(10**9)
         await coordinator._async_update_data()
+        await hass.async_block_till_done()
         # No retry storm — unsupported transports are probed once.
         assert calls == [1]
 
@@ -257,14 +260,17 @@ class TestCoordinatorSlowLane:
             hass, make_entry(), device, sensor_mod, busy
         )
         await coordinator._async_update_data()  # status: preparing_milk
+        await hass.async_block_till_done()
         assert coordinator._statistics_due_at is None
         device.get_monitor = lambda: ready
         await coordinator._async_update_data()  # transition → ready
+        await hass.async_block_till_done()
         assert coordinator._statistics_due_at is not None
         # Interval would skip (just fetched), but the due fires anyway.
         coordinator._statistics_due_at = 0
         calls.clear()
         await coordinator._async_update_data()
+        await hass.async_block_till_done()
         assert calls == [1]
         # Staying at ready does not retrigger.
         assert coordinator._statistics_due_at is None
@@ -273,5 +279,6 @@ class TestCoordinatorSlowLane:
             time.monotonic() - coordinator_mod.STATISTICS_INTERVAL.total_seconds() - 1
         )  # past the lane cadence
         await coordinator._async_update_data()
+        await hass.async_block_till_done()
         assert calls == [1]  # normal cadence only
         assert coordinator._statistics_due_at is None
