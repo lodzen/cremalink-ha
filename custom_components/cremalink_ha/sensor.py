@@ -108,7 +108,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
                 continue
             entities.append(CremalinkCloudCounterSensor(coordinator, entry, logical))
 
-    if callable(getattr(device, "firmware_info", None)):
+    # Firmware versions come from the cloud metadata; LAN machines have none.
+    if connection_type == CONNECTION_CLOUD and callable(
+        getattr(device, "firmware_info", None)
+    ):
         entities.append(CremalinkFirmwareSensor(device, entry))
 
     async_add_entities(entities)
@@ -355,10 +358,12 @@ class CremalinkFirmwareSensor(SensorEntity):
             registry = dr.async_get(self.hass)
             identifier = (DOMAIN, self._entry_id)
             if hasattr(registry, "async_get_device_by_identifier"):
-                entry = registry.async_get_device_by_identifier(
+                device_entry = registry.async_get_device_by_identifier(
                     identifier, self._entry_id
                 )
             else:  # Home Assistant before 2026.11
-                entry = registry.async_get_device(identifiers={identifier})
-            if entry is not None and entry.sw_version != info["machine"]:
-                registry.async_update_device(entry.id, sw_version=info["machine"])
+                device_entry = registry.async_get_device(identifiers={identifier})
+            if device_entry is not None and device_entry.sw_version != info["machine"]:
+                registry.async_update_device(
+                    device_entry.id, sw_version=info["machine"]
+                )
