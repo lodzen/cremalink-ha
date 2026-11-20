@@ -58,14 +58,15 @@ def _normalize_advertised_ip(value: str | None) -> str | None:
     return str(IPv4Address(value.strip()))
 
 
-def get_available_maps(hass: HomeAssistant) -> list[str]:
+def get_available_maps(hass: HomeAssistant) -> dict[str, str]:
     """Retrieve available device maps, including custom ones.
 
     Args:
         hass: The Home Assistant instance.
 
     Returns:
-        A list of available device map identifiers.
+        Map identifiers mapped to a label for the picker, e.g.
+        ``"ECAM452 – Eletta Explore"`` when the map names its model.
     """
     try:
         # Get built-in maps from the library
@@ -80,7 +81,12 @@ def get_available_maps(hass: HomeAssistant) -> list[str]:
             if f.endswith(".json"):
                 maps.append(f"custom:{f}")
     maps.sort()
-    return maps
+
+    labels: dict[str, str] = {}
+    for map_id in maps:
+        model_name = get_map_data(hass, map_id).get("model_name")
+        labels[map_id] = f"{map_id} – {model_name}" if model_name else map_id
+    return labels
 
 
 def get_map_data(hass: HomeAssistant, map_name: str) -> dict:
