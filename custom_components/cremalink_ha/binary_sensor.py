@@ -6,12 +6,11 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.const import EntityCategory
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES
+from .const import CONF_CONNECTION_TYPE, DOMAIN, STANDBY_STATUSES, device_info
 from .coordinator import CremalinkCoordinator
 
 #: Monitor predicates: (key, icon, device class). Names come from the entity
@@ -137,11 +136,7 @@ class CremalinkBinarySensor(
             None if key in _PRIMARY_BINARY_KEYS else EntityCategory.DIAGNOSTIC
         )
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="cremalink",
-        )
+        self._attr_device_info = device_info(entry, coordinator.device)
 
         self._standby_cache = None
 

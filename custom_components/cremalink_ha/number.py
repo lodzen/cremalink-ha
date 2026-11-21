@@ -17,10 +17,14 @@ from cremalink.ecam.params import PARAMS, adjustable_params, to_display, to_raw
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import BUTTON_UNAVAILABLE_STATUSES, DOMAIN, NOT_BREWING_STATUSES
+from .const import (
+    BUTTON_UNAVAILABLE_STATUSES,
+    DOMAIN,
+    NOT_BREWING_STATUSES,
+    device_info,
+)
 from .coordinator import CremalinkCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,11 +69,7 @@ class CremalinkParamNumber(CoordinatorEntity[CremalinkCoordinator], NumberEntity
         self._meta = PARAMS[param_id]
         self._attr_translation_key = f"param_{self._meta.key}"
         self._attr_unique_id = f"{entry.entry_id}_recipe_param_{param_id}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="cremalink",
-        )
+        self._attr_device_info = device_info(entry, device)
 
     @property
     def _params(self):

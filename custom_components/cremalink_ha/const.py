@@ -1,5 +1,7 @@
 """Constants for the Cremalink Home Assistant integration."""
 
+from homeassistant.helpers.entity import DeviceInfo
+
 DEVICE_NAME = "device_name"
 
 DOMAIN = "cremalink_ha"
@@ -41,6 +43,21 @@ CONF_ADVERTISED_IP = "advertised_ip"
 def catalog_ready_signal(entry_id: str) -> str:
     """Dispatcher signal: the cloud catalogue snapshot was seeded."""
     return f"{DOMAIN}_catalog_ready_{entry_id}"
+
+
+def device_info(entry, device) -> DeviceInfo:
+    """Shared device registry info — model comes from the device map.
+
+    ``model_name`` is map data (``None`` when the map does not name the
+    model); the firmware version is set separately via the device
+    registry once ``firmware_info`` resolves.
+    """
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=entry.title,
+        manufacturer="DeLonghi",
+        model=getattr(device, "model_name", None),
+    )
 
 
 DEFAULT_LOCAL_SERVER_PORT = 10280

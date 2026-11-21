@@ -9,7 +9,7 @@ from pathlib import Path
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
@@ -328,7 +328,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _async_preload_catalog(hass, entry, device, dsn),
             f"{DOMAIN}_{entry.entry_id}_cloud_catalog",
         )
+    elif connection_type == CONNECTION_CLOUD:
+        entry.async_create_background_task(
+            hass,
+            _async_apply_firmware_info(hass, entry, device),
+            f"{DOMAIN}_{entry.entry_id}_device_firmware",
+        )
     return True
+
+
+def _set_device_sw_version(hass: HomeAssistant, entry: ConfigEntry, sw_version) -> None:
+    """Put the machine firmware on the device registry entry."""
+    if not sw_version:
+        return
+    dev_reg = dr.async_get(hass)
+    try:
+        device_entry = dev_reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, entry.entry_id)},
+        )
+    except HomeAssistantError:
+        # Entry unloaded between the fetch and the registry write.
+        return
+    if device_entry.sw_version != sw_version:
+        dev_reg.async_update_device(device_entry.id, sw_version=sw_version)
+
+
+async def _async_apply_firmware_info(
+    hass: HomeAssistant, entry: ConfigEntry, device
+) -> None:
+    """Set ``sw_version`` from ``firmware_info`` — the no-cloud path.
+
+    On LAN the Soul republishes ``software_version`` on request (one
+    queued GET, protocol.md §14.7, captures/lan_software_version.json);
+    on cloud devices it is a plain property-store read. Runs as a
+    background task so the setup path never waits on it.
+    """
+    try:
+        info = await hass.async_add_executor_job(device.firmware_info)
+    except Exception as err:  # noqa: BLE001 — cosmetic field, never fatal
+        _LOGGER.debug("firmware_info failed for %s: %r", entry.entry_id, err)
+        return
+    _set_device_sw_version(hass, entry, info.get("machine"))
 
 
 async def _async_preload_catalog(
@@ -341,48 +382,58 @@ async def _async_preload_catalog(
     (research.md R11). Over LAN every named GET costs a ~1.3 s slot on
     the machine's one-payload-per-poll lane (protocol.md §14.12), so the
     cloud snapshot supplies the factory descriptors and menu orders for
-    free. Optional: without a stored cloud token — or on any cloud
-    failure — the library's lazy LAN reads (one GET per use, cached)
-    remain the backup, so nothing here may raise.
+    free. The same payload also carries ``software_version`` — the
+    machine firmware the device registry shows — so it is picked up here
+    without a machine request; ``firmware_info`` (LAN republish) is the
+    fallback when there is no token or the cloud fetch fails.
     """
     token_file = entry.options.get(CONF_TOKEN_FILE) or entry.data.get(CONF_TOKEN_FILE)
+    sw_version: str | None = None
     if not token_file:
         _LOGGER.debug(
             "Cloud catalogue preload skipped: no cloud token stored for %s", dsn
         )
-        return
-
-    def _fetch_and_seed() -> tuple[int, int]:
-        client = Client(token_file, logger=_LOGGER)
-        properties = client.fetch_properties(dsn)
-        seeded = device.seed_catalog_from_properties(properties)
-        return len(properties), seeded
-
-    try:
-        started = time.monotonic()
-        fetched, seeded = await hass.async_add_executor_job(_fetch_and_seed)
-    except Exception as err:  # noqa: BLE001 - any failure falls back to LAN reads
-        _LOGGER.info(
-            "Cloud catalogue unavailable (%s); using lazy LAN reads", type(err).__name__
-        )
-        _LOGGER.debug("Cloud catalogue preload failed for %s: %r", dsn, err)
-        return
-    _LOGGER.debug(
-        "Cloud catalogue seeded %d recipe descriptors from %d cloud "
-        "properties in %.1f s (descriptors + menu orders now cached; "
-        "recipe values stay live reads)",
-        seeded,
-        fetched,
-        time.monotonic() - started,
-    )
-    if seeded:
-        async_dispatcher_send(hass, catalog_ready_signal(entry.entry_id))
-        _LOGGER.debug("Cloud catalogue ready signal dispatched")
     else:
-        _LOGGER.debug(
-            "Cloud catalogue seed produced 0 descriptors — lazy LAN reads "
-            "remain the fallback"
-        )
+
+        def _fetch_and_seed() -> tuple[int, int, str | None]:
+            client = Client(token_file, logger=_LOGGER)
+            properties = client.fetch_properties(dsn)
+            seeded = device.seed_catalog_from_properties(properties)
+            sw = properties.get("software_version")
+            return len(properties), seeded, sw
+
+        try:
+            started = time.monotonic()
+            fetched, seeded, sw_version = await hass.async_add_executor_job(
+                _fetch_and_seed
+            )
+        except Exception as err:  # noqa: BLE001 - falls back to LAN reads
+            _LOGGER.info(
+                "Cloud catalogue unavailable (%s); using lazy LAN reads",
+                type(err).__name__,
+            )
+            _LOGGER.debug("Cloud catalogue preload failed for %s: %r", dsn, err)
+        else:
+            _LOGGER.debug(
+                "Cloud catalogue seeded %d recipe descriptors from %d cloud "
+                "properties in %.1f s (descriptors + menu orders now cached; "
+                "recipe values stay live reads)",
+                seeded,
+                fetched,
+                time.monotonic() - started,
+            )
+            if seeded:
+                async_dispatcher_send(hass, catalog_ready_signal(entry.entry_id))
+                _LOGGER.debug("Cloud catalogue ready signal dispatched")
+            else:
+                _LOGGER.debug(
+                    "Cloud catalogue seed produced 0 descriptors — lazy LAN reads "
+                    "remain the fallback"
+                )
+    if sw_version is None and callable(getattr(device, "firmware_info", None)):
+        await _async_apply_firmware_info(hass, entry, device)
+    elif sw_version is not None:
+        _set_device_sw_version(hass, entry, " ".join(str(sw_version).split()))
 
 
 async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:

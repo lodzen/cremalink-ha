@@ -5,7 +5,6 @@ import logging
 from homeassistant.components.button import ButtonEntity
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
@@ -15,6 +14,7 @@ from .const import (
     NOT_BREWING_STATUSES,
     NOT_READY_STATUSES,
     TRANSLATED_COMMANDS,
+    device_info,
 )
 from .coordinator import CremalinkCoordinator
 
@@ -92,11 +92,7 @@ class CremalinkButton(CoordinatorEntity[CremalinkCoordinator], ButtonEntity):
         self._attr_unique_id = f"{entry.entry_id}_cmd_{cmd}"
         self._attr_icon = "mdi:coffee"
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="cremalink",
-        )
+        self._attr_device_info = device_info(entry, device)
 
     @property
     def available(self):

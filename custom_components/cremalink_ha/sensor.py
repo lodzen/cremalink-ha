@@ -7,11 +7,16 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import PERCENTAGE, UnitOfVolume
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_CONNECTION_TYPE, CONNECTION_CLOUD, DOMAIN, STANDBY_STATUSES
+from .const import (
+    CONF_CONNECTION_TYPE,
+    CONNECTION_CLOUD,
+    DOMAIN,
+    STANDBY_STATUSES,
+    device_info,
+)
 from .coordinator import CremalinkCoordinator
 
 #: Monitor-value sensors: (key, icon, unit, enum_profile_key). Names come from
@@ -48,14 +53,6 @@ def _stat_suffix(a2_id: int, label: str) -> str:
     if 3000 <= a2_id < 4000:
         return f"stat_bev_{label}"
     return f"stat_{label}"
-
-
-def _device_info(entry):
-    return DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=entry.title,
-        manufacturer="cremalink",
-    )
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -113,7 +110,7 @@ class _CremalinkEntityBase(CoordinatorEntity[CremalinkCoordinator]):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
-        self._attr_device_info = _device_info(entry)
+        self._attr_device_info = device_info(entry, coordinator.device)
 
     @property
     def available(self):

@@ -20,7 +20,6 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import (
     RestoredExtraData,
     RestoreEntity,
@@ -34,6 +33,7 @@ from .const import (
     NOT_READY_STATUSES,
     STANDBY_STATUSES,
     catalog_ready_signal,
+    device_info,
 )
 from .coordinator import CremalinkCoordinator
 
@@ -106,11 +106,7 @@ class _BaseSelect(CoordinatorEntity[CremalinkCoordinator], SelectEntity):
         self._asleep = False
         self._options_refresh_retry_at = 0.0
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="cremalink",
-        )
+        self._attr_device_info = device_info(entry, device)
 
     @property
     def available(self):

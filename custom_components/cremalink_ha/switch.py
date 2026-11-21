@@ -14,7 +14,6 @@ from cremalink.ecam.settings import SETTING_BIT_MAPS
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -25,12 +24,18 @@ from .const import (
     NOT_BREWING_STATUSES,
     NOT_READY_STATUSES,
     STANDBY_STATUSES,
+    device_info,
 )
 from .coordinator import CremalinkCoordinator
 
 #: How long the switch shows the commanded state before trusting the
 #: monitor again (a wake-up was seen to report only after ~3 min).
 POWER_PENDING_SECONDS = 240
+
+#: Same grace for the brew switch: brew/stop confirms within a few
+#: monitor polls, so a much shorter window bounds a command that never
+#: took effect — after it the switch returns to the monitor's truth.
+BREW_PENDING_SECONDS = 60
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -94,11 +99,7 @@ class CremalinkPowerSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity
         self._attr_unique_id = f"{entry.entry_id}_power"
         self._attr_icon = "mdi:power"
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="cremalink",
-        )
+        self._attr_device_info = device_info(entry, device)
         # (target state, monotonic deadline) after a command: the machine
         # takes 30 s to minutes to report waking up or going to sleep, and
         # the switch must not snap back meanwhile.
@@ -190,11 +191,7 @@ class CremalinkSettingSwitch(
         self._attr_translation_key = suffix
         self._attr_icon = icon
         self._connection_type = entry.data.get(CONF_CONNECTION_TYPE)
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="cremalink",
-        )
+        self._attr_device_info = device_info(entry, device)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -313,11 +310,11 @@ class CremalinkBrewSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity)
         self._attr_translation_key = "brew_recipe"
         self._attr_unique_id = f"{entry.entry_id}_brew_recipe"
         self._attr_icon = "mdi:coffee"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer="cremalink",
-        )
+        self._attr_device_info = device_info(entry, device)
+        # (target, deadline) after a brew/stop command — the monitor can
+        # still report brewing for a few polls after stop, and without
+        # the grace the switch would snap back on (production 2026-11-21).
+        self._pending: tuple[bool, float] | None = None
 
     def _brewing(self):
         """Monitor says a brewing action is running (same rule the drink
@@ -335,7 +332,14 @@ class CremalinkBrewSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity)
         data = self.coordinator.data
         if not data or data.status_name is None:
             return None
-        return self._brewing()
+        brewing = self._brewing()
+        if self._pending is not None:
+            target, deadline = self._pending
+            if brewing == target or time.monotonic() >= deadline:
+                self._pending = None
+            else:
+                return target
+        return brewing
 
     @property
     def available(self):
@@ -376,8 +380,12 @@ class CremalinkBrewSwitch(CoordinatorEntity[CremalinkCoordinator], SwitchEntity)
                 params=self.session.params,
             )
         )
+        self._pending = (True, time.monotonic() + BREW_PENDING_SECONDS)
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs):
         await self.hass.async_add_executor_job(self.device.do, "stop")
+        self._pending = (False, time.monotonic() + BREW_PENDING_SECONDS)
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

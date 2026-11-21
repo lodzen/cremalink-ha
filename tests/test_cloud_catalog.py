@@ -6,7 +6,12 @@ and protocol.md §14.12 (every machine GET costs a lane slot).
 
 from custom_components.cremalink_ha import _async_preload_catalog
 from custom_components.cremalink_ha import select as select_mod
-from custom_components.cremalink_ha.const import CONF_TOKEN_FILE, catalog_ready_signal
+from custom_components.cremalink_ha.const import (
+    CONF_TOKEN_FILE,
+    DOMAIN,
+    catalog_ready_signal,
+)
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -98,6 +103,50 @@ class TestPreload:
         device, _ = _device(seeded=0)
         entry = make_entry(data={CONF_TOKEN_FILE: "/t/DSN1.json"})
         assert await _run(hass, entry, device) == []
+
+
+class TestSwVersion:
+    """``sw_version`` on the device registry: cloud store first, the
+    machine's ``software_version`` datapoint as the no-token fallback
+    (protocol.md §14.7, captures/lan_software_version.json)."""
+
+    async def test_cloud_software_version_sets_sw_version(self, hass, monkeypatch):
+        monkeypatch.setattr("custom_components.cremalink_ha.Client", _Client)
+        _Client.instances, _Client.error = [], None
+        _Client.props = {
+            "d001_rec_espresso": "AAA=",
+            "software_version": "Millcore_demo 2.0.0  Jun 18 2020 15:41:06",
+        }
+        try:
+            device, _ = _device()
+            entry = make_entry(data={CONF_TOKEN_FILE: "/t/DSN1.json"})
+            entry.add_to_hass(hass)
+            await _run(hass, entry, device)
+            dev_reg = dr.async_get(hass)
+            device_entry = dev_reg.async_get_device_by_identifier(
+                (DOMAIN, entry.entry_id), entry.entry_id
+            )
+            assert device_entry is not None
+            assert device_entry.sw_version == (
+                "Millcore_demo 2.0.0 Jun 18 2020 15:41:06"
+            )
+        finally:
+            _Client.props = {"d001_rec_espresso": "AAA="}
+
+    async def test_no_token_falls_back_to_lan_software_version(self, hass):
+        device, _ = _device()
+        device.firmware_info = lambda: {
+            "machine": "Millcore_demo 2.0.0 Jun 18 2020 15:41:06"
+        }
+        entry = make_entry(data={})
+        entry.add_to_hass(hass)
+        await _run(hass, entry, device)
+        dev_reg = dr.async_get(hass)
+        device_entry = dev_reg.async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        )
+        assert device_entry is not None
+        assert device_entry.sw_version == ("Millcore_demo 2.0.0 Jun 18 2020 15:41:06")
 
 
 class TestSelectReordersOnSeed:

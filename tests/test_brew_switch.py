@@ -1,5 +1,7 @@
 """Brew switch: one entity for brew + stop (replaces button.brew_recipe/cmd_stop)."""
 
+import time
+
 import pytest
 from cremalink.domain.device import RecipeParams
 from custom_components.cremalink_ha import switch as switch_mod
@@ -127,3 +129,55 @@ class TestBrewSwitchActions:
         )
         await _brew_switch(entities).async_turn_off()
         assert calls == ["stop"]
+
+
+class TestBrewSwitchPending:
+    async def test_stays_off_after_stop_while_monitor_still_reports_brewing(self, hass):
+        """Stop must not snap back on while the monitor still says brewing
+        (production 2026-11-21: the poll right after stop flipped the
+        switch back on before the machine confirmed the stop)."""
+        coordinator, entities, _ = await _setup(
+            hass, monitor=FakeMonitorData(status_name="ready", is_busy=True)
+        )
+        switch = _brew_switch(entities)
+        await switch.async_turn_off()
+        assert switch.is_on is False
+        coordinator.data = FakeMonitorData(status_name="ready", is_busy=True)
+        switch._handle_coordinator_update()
+        assert switch.is_on is False
+
+    async def test_pending_clears_when_monitor_confirms_stop(self, hass):
+        coordinator, entities, _ = await _setup(
+            hass, monitor=FakeMonitorData(status_name="ready", is_busy=True)
+        )
+        switch = _brew_switch(entities)
+        await switch.async_turn_off()
+        coordinator.data = FakeMonitorData(status_name="rinsing", is_busy=True)
+        assert switch.is_on is False
+        assert switch._pending is None
+
+    async def test_pending_expiry_returns_monitor_truth(self, hass, monkeypatch):
+        """A stop the machine never applied must not hide forever."""
+        _, entities, _ = await _setup(
+            hass, monitor=FakeMonitorData(status_name="ready", is_busy=True)
+        )
+        switch = _brew_switch(entities)
+        await switch.async_turn_off()
+        later = time.monotonic() + switch_mod.BREW_PENDING_SECONDS + 1
+        monkeypatch.setattr(switch_mod.time, "monotonic", lambda: later)
+        assert switch.is_on is True
+
+    async def test_on_pending_until_monitor_confirms_brew(self, hass):
+        """After brew the switch shows on even while the monitor has not
+        caught up yet — mirrors the power-switch pending semantics."""
+        coordinator, entities, session = await _setup(hass)
+        session.select(0x01)
+        session.params = _params(0x01)
+        session.loading = False
+        switch = _brew_switch(entities)
+        await switch.async_turn_on()
+        assert switch.is_on is True
+        coordinator.data = FakeMonitorData(status_name="ready", is_busy=True)
+        switch._handle_coordinator_update()
+        assert switch.is_on is True
+        assert switch._pending is None
